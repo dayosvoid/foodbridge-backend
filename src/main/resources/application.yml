@@ -2,8 +2,8 @@ spring:
   application:
     name: foodbridge
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/foodbridge}
-    username: ${DB_USERNAME:foodbridge}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
