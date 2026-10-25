@@ -1,0 +1,43 @@
+﻿# Engineer A changed files
+
+M = modified; ?? = created. Baseline working tree was clean.
+
+ M .env.example
+ M README.md
+ M docs/architecture.md
+ M src/main/resources/application.yml
+ M src/test/java/com/tesa/foodbridge/ModuleBoundaryTest.java
+?? docs/concurrency-evidence.txt
+?? docs/engineer-a-files.txt
+?? docs/engineer-a-handoff.md
+?? docs/engineer-a-verification.md
+?? src/main/java/com/tesa/foodbridge/activity/api/ActivityRecorder.java
+?? src/main/java/com/tesa/foodbridge/activity/domain/Activity.java
+?? src/main/java/com/tesa/foodbridge/activity/service/DatabaseActivityRecorder.java
+?? src/main/java/com/tesa/foodbridge/demo/DemoSeed.java
+?? src/main/java/com/tesa/foodbridge/handover/api/HandoverOperations.java
+?? src/main/java/com/tesa/foodbridge/handover/domain/Handover.java
+?? src/main/java/com/tesa/foodbridge/handover/service/DatabaseHandoverOperations.java
+?? src/main/java/com/tesa/foodbridge/listing/api/ListingOperations.java
+?? src/main/java/com/tesa/foodbridge/listing/domain/Listing.java
+?? src/main/java/com/tesa/foodbridge/listing/repository/ListingRepository.java
+?? src/main/java/com/tesa/foodbridge/listing/service/DefaultListingOperations.java
+?? src/main/java/com/tesa/foodbridge/reservation/api/ListingAlreadyReserved.java
+?? src/main/java/com/tesa/foodbridge/reservation/api/ReservationOperations.java
+?? src/main/java/com/tesa/foodbridge/reservation/domain/ReservationRequest.java
+?? src/main/java/com/tesa/foodbridge/reservation/repository/RequestRepository.java
+?? src/main/java/com/tesa/foodbridge/reservation/service/DefaultReservationOperations.java
+?? src/main/java/com/tesa/foodbridge/shared/Actor.java
+?? src/main/java/com/tesa/foodbridge/shared/RequestIdFilter.java
+?? src/main/java/com/tesa/foodbridge/shared/RuleViolation.java
+?? src/main/java/com/tesa/foodbridge/user/api/UserDirectory.java
+?? src/main/java/com/tesa/foodbridge/user/domain/User.java
+?? src/main/java/com/tesa/foodbridge/user/service/DatabaseUserDirectory.java
+?? src/main/resources/db/migration/V1__foodbridge_foundation.sql
+?? src/main/resources/db/migration/V2__one_approved_request_per_listing.sql
+?? src/main/resources/db/rollback/V1__manual.sql
+?? src/main/resources/db/rollback/V2__manual.sql
+?? src/test/java/com/tesa/foodbridge/ConstraintEvidenceTest.java
+?? src/test/java/com/tesa/foodbridge/PostgresRulesTest.java
+?? src/test/java/com/tesa/foodbridge/RequestIdFilterTest.java
+?? src/test/resources/docker-java.properties
