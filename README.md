@@ -15,9 +15,13 @@ Each business module has `api`, `domain`, `repository`, `service`, `web` package
 
 ## Team branches
 
-Adedayo: `feat/data-rules` — schema, Flyway migrations, database rules, seed data and tests.
+Adedayo: `dayo/data-rules` — schema, Flyway migrations, database rules, seed data and tests.
 Esther: `feat/api-access` — OpenAPI, controllers, authentication, role checks and deployment.
 
 ## Status
 
-Scaffold only. **No working API, authentication, business schema, seed data, or concurrency protection yet.** The CI workflow runs Maven verification, not deployment. ArchUnit rules are placeholders. Do not claim capstone requirements are complete.
+Data/rules services, Flyway schema, PostgreSQL approval protection, opt-in simulated fixtures,
+request-ID logging and real PostgreSQL concurrency tests are implemented. Controllers and authentication
+remain integration work; this is not yet an end-to-end API. The CI workflow runs Maven verification,
+not deployment. Docker is required for `mvn -B verify`; tests use disposable PostgreSQL 17 containers.
+See [Engineer A handoff](docs/engineer-a-handoff.md) for proposed contracts, fixtures, rollback and slide-4 evidence.

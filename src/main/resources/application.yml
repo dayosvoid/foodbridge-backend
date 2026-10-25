@@ -2,11 +2,9 @@ spring:
   application:
     name: foodbridge
   datasource:
-    # Notice I updated the default port to 5433 and credentials based on your second block,
-    # while keeping the environment variable fallbacks intact.
     url: ${DB_URL:jdbc:postgresql://localhost:5433/foodbridge}
     username: ${DB_USERNAME:foodbridge}
-    password: ${DB_PASSWORD:foodbridge_dev}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -17,3 +15,8 @@ spring:
 
 server:
   port: ${PORT:8080}
+
+logging:
+  structured:
+    format:
+      console: ecs
