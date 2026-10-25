@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: FoodBridge API
+  description: API for coordinating surplus food listings and recipient requests.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/listings:
+    get:
+      summary: Browse available food listings
+      parameters:
+        - {name: category, in: query, required: false, schema: {type: string}}
+        - {name: pickupArea, in: query, required: false, schema: {type: string}}
+        - {name: availability, in: query, required: false, schema: {type: string, enum: [AVAILABLE, EXPIRED]}}
+        - {name: keyword, in: query, required: false, schema: {type: string}}
+      responses:
+        '200': {description: Listings returned, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Listing'}}}}}
+    post:
+      summary: Create a food listing
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CreateListingRequest'}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Listing'}}}}
+        '400': {description: Invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '401': {description: Authentication required}
+        '403': {description: Donor or admin role required}
+  /api/listings/{listingId}:
+    get:
+      summary: Get a listing
+      parameters: [{name: listingId, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Listing returned, content: {application/json: {schema: {$ref: '#/components/schemas/Listing'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  /api/listings/{listingId}/requests:
+    post:
+      summary: Request a food listing
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: listingId, in: path, required: true, schema: {type: string}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+      responses:
+        '201': {description: Request created, content: {application/json: {schema: {$ref: '#/components/schemas/FoodRequest'}}}}
+        '401': {description: Authentication required}
+        '403': {description: Recipient role required}
+        '409': {description: Listing unavailable, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  /api/requests/{requestId}:
+    get:
+      summary: Get a food request
+      security: [{basicAuth: []}]
+      parameters: [{name: requestId, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Request returned, content: {application/json: {schema: {$ref: '#/components/schemas/FoodRequest'}}}}
+        '401': {description: Authentication required}
+        '403': {description: Not allowed}
+        '404': {description: Not found}
+  /api/requests/{requestId}/approve:
+    patch:
+      summary: Approve a food request
+      security: [{basicAuth: []}]
+      parameters: [{name: requestId, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/FoodRequest'}}}}
+        '401': {description: Authentication required}
+        '403': {description: Donor owner or admin required}
+        '404': {description: Not found}
+        '409': {description: Already reserved, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+components:
+  securitySchemes:
+    basicAuth: {type: http, scheme: basic}
+  schemas:
+    CreateListingRequest:
+      type: object
+      required: [title, category, quantity, pickupArea, collectionDeadline]
+      properties:
+        title: {type: string}
+        description: {type: string}
+        category: {type: string}
+        quantity: {type: integer, minimum: 1}
+        unit: {type: string}
+        imageReference: {type: string, nullable: true}
+        pickupArea: {type: string}
+        collectionDeadline: {type: string, format: date-time}
+    Listing:
+      allOf:
+        - {$ref: '#/components/schemas/CreateListingRequest'}
+        - type: object
+          required: [id, state, donorId]
+          properties:
+            id: {type: string}
+            state: {type: string, enum: [AVAILABLE, RESERVED, EXPIRED, COMPLETED]}
+            donorId: {type: string}
+    FoodRequest:
+      type: object
+      required: [id, listingId, requesterId, state, createdAt]
+      properties:
+        id: {type: string}
+        listingId: {type: string}
+        requesterId: {type: string}
+        state: {type: string, enum: [PENDING, APPROVED, DECLINED, EXPIRED]}
+        createdAt: {type: string, format: date-time}
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        timestamp: {type: string, format: date-time}
