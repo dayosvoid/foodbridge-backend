@@ -1,6 +1,7 @@
 package com.tesa.foodbridge.reservation.service;
 
 import com.tesa.foodbridge.reservation.api.FoodRequestResponse;
+import com.tesa.foodbridge.reservation.api.ReservationQuery;
 import com.tesa.foodbridge.shared.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
@@ -9,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
-public class ReservationApiService {
+public class ReservationApiService implements ReservationQuery {
 
     private final List<FoodRequestResponse> requests =
             new CopyOnWriteArrayList<>();
@@ -28,8 +29,8 @@ public class ReservationApiService {
         );
     }
 
-    public List<FoodRequestResponse> findForListing(
-            String listingId) {
+    @Override
+    public List<FoodRequestResponse> findForListing(String listingId) {
 
         return requests.stream()
                 .filter(request ->
