@@ -4,7 +4,7 @@ import com.tesa.foodbridge.listing.api.CreateListingRequest;
 import com.tesa.foodbridge.listing.api.ListingResponse;
 import com.tesa.foodbridge.listing.service.ListingApiService;
 import com.tesa.foodbridge.reservation.api.FoodRequestResponse;
-import com.tesa.foodbridge.reservation.service.ReservationApiService;
+import com.tesa.foodbridge.reservation.api.ReservationQuery;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -16,14 +16,14 @@ import java.util.List;
 public class ListingController {
 
     private final ListingApiService listingApiService;
-    private final ReservationApiService reservationApiService;
+    private final ReservationQuery reservationQuery;
 
     public ListingController(
             ListingApiService listingApiService,
-            ReservationApiService reservationApiService) {
+            ReservationQuery reservationQuery) {
 
         this.listingApiService = listingApiService;
-        this.reservationApiService = reservationApiService;
+        this.reservationQuery = reservationQuery;
     }
 
     @PostMapping
@@ -59,8 +59,8 @@ public class ListingController {
         // Verify that the listing exists
         listingApiService.get(listingId);
 
-        // Return requests made against this listing
-        return reservationApiService.findForListing(listingId);
+        // Return all requests for this listing
+        return reservationQuery.findForListing(listingId);
     }
 
     @GetMapping("/{listingId}")
