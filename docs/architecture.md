@@ -6,4 +6,8 @@ Flyway migrations live in `src/main/resources/db/migration`.
 
 Ownership: Adedayo — data, rules, migrations, concurrency tests; Esther — API, access, CI and deployments (shared reviews).
 
-This is a skeleton; contracts, schema, endpoints, authentication and concurrency tests are not implemented yet.
+Data/rules services use public module API contracts, explicit transactional JDBC writes in their owning
+modules, and JPA entity mappings for schema validation. Flyway V1/V2 own the schema and partial unique
+index protecting approvals. ArchUnit prevents access to other modules' internals and module cycles.
+The demo fixture utility is an explicit opt-in administrative exception that populates multiple tables.
+Controllers/authentication remain pending; proposed integration contracts are in engineer-a-handoff.md.
