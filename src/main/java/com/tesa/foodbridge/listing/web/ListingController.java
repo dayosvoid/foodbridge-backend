@@ -3,6 +3,8 @@ package com.tesa.foodbridge.listing.web;
 import com.tesa.foodbridge.listing.api.CreateListingRequest;
 import com.tesa.foodbridge.listing.api.ListingResponse;
 import com.tesa.foodbridge.listing.service.ListingApiService;
+import com.tesa.foodbridge.reservation.api.FoodRequestResponse;
+import com.tesa.foodbridge.reservation.service.ReservationApiService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -14,9 +16,14 @@ import java.util.List;
 public class ListingController {
 
     private final ListingApiService listingApiService;
+    private final ReservationApiService reservationApiService;
 
-    public ListingController(ListingApiService listingApiService) {
+    public ListingController(
+            ListingApiService listingApiService,
+            ReservationApiService reservationApiService) {
+
         this.listingApiService = listingApiService;
+        this.reservationApiService = reservationApiService;
     }
 
     @PostMapping
@@ -43,6 +50,17 @@ public class ListingController {
                 availability,
                 keyword
         );
+    }
+
+    @GetMapping("/{listingId}/requests")
+    public List<FoodRequestResponse> getRequests(
+            @PathVariable String listingId) {
+
+        // Verify that the listing exists
+        listingApiService.get(listingId);
+
+        // Return requests made against this listing
+        return reservationApiService.findForListing(listingId);
     }
 
     @GetMapping("/{listingId}")
