@@ -6,7 +6,42 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
+  - url: https://YOUR-FOODBRIDGE-RENDER-URL.onrender.com
+    description: Render deployment
 paths:
+  /api/auth/login:
+    post:
+      summary: Login and return the Basic Auth token plus user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401': {description: Invalid credentials}
+  /api/auth/me:
+    get:
+      summary: Get the current user's profile
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401': {description: Authentication required}
   /api/listings:
     get:
       summary: Browse available food listings
@@ -36,6 +71,20 @@ paths:
         '200': {description: Listing returned, content: {application/json: {schema: {$ref: '#/components/schemas/Listing'}}}}
         '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
   /api/listings/{listingId}/requests:
+    get:
+      summary: Get requests for a listing
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: listingId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Requests returned
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/FoodRequest'}}
+        '401': {description: Authentication required}
+        '403': {description: Donor owner or admin required}
+        '404': {description: Not found}
     post:
       summary: Request a food listing
       security: [{basicAuth: []}]
@@ -88,20 +137,41 @@ components:
       allOf:
         - {$ref: '#/components/schemas/CreateListingRequest'}
         - type: object
-          required: [id, state, donorId]
+          required: [id, state, donorId, donorName, createdAt, pendingRequestCount]
           properties:
             id: {type: string}
+            donorName: {type: string}
+            createdAt: {type: string, format: date-time}
+            pendingRequestCount: {type: integer, minimum: 0}
             state: {type: string, enum: [AVAILABLE, RESERVED, EXPIRED, COMPLETED]}
             donorId: {type: string}
     FoodRequest:
       type: object
-      required: [id, listingId, requesterId, state, createdAt]
+      required: [id, listingId, requesterId, requesterName, state, createdAt]
       properties:
         id: {type: string}
         listingId: {type: string}
         requesterId: {type: string}
-        state: {type: string, enum: [PENDING, APPROVED, DECLINED, EXPIRED]}
+        requesterName: {type: string}
+        state: {type: string, enum: [PENDING, APPROVED, DECLINED, CANCELLED, EXPIRED]}
         createdAt: {type: string, format: date-time}
+    LoginResponse:
+      type: object
+      required: [token, id, name, role, organisationName]
+      properties:
+        token: {type: string}
+        id: {type: string}
+        name: {type: string}
+        role: {type: string}
+        organisationName: {type: string}
+    MeResponse:
+      type: object
+      required: [id, name, role, organisationName]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        role: {type: string}
+        organisationName: {type: string}
     ErrorResponse:
       type: object
       required: [code, message, timestamp]
