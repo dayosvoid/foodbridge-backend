@@ -57,6 +57,7 @@ public class AuthController {
         );
     }
 
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "basicAuth")
     @GetMapping("/me")
     public MeResponse me(Authentication authentication) {
         return profiles.get(authentication.getName());

@@ -43,26 +43,19 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // Login does not require authentication
                         .requestMatchers(
                                 "/actuator/health",
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // Public listing endpoints
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/listings",
-                                "/api/listings/*"
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/listings").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/listings/*").permitAll()
 
-                        // Everything else under /api requires authentication
                         .requestMatchers("/api/**").authenticated()
 
                         .anyRequest().permitAll()
                 )
 
-                // Keep Basic Authentication
                 .httpBasic(Customizer.withDefaults());
 
         return http.build();
