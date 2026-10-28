@@ -11,7 +11,7 @@ public class UserProfileService {
     private final Map<String, MeResponse> profiles = Map.of(
             "donor1",
             new MeResponse(
-                    "donor1",
+                    com.tesa.foodbridge.demo.DemoSeed.id("donor1").toString(),
                     "Fresh Foods Bakery",
                     "DONOR",
                     "Fresh Foods Bakery"
@@ -19,7 +19,7 @@ public class UserProfileService {
 
             "recipient1",
             new MeResponse(
-                    "recipient1",
+                    com.tesa.foodbridge.demo.DemoSeed.id("recipient1").toString(),
                     "Hope Community",
                     "RECIPIENT",
                     "Hope Community"
@@ -27,7 +27,7 @@ public class UserProfileService {
 
             "admin1",
             new MeResponse(
-                    "admin1",
+                    com.tesa.foodbridge.demo.DemoSeed.id("admin").toString(),
                     "FoodBridge Admin",
                     "ADMIN",
                     "FoodBridge"
