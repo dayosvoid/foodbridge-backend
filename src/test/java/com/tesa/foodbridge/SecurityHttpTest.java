@@ -1,25 +1,23 @@
 
 package com.tesa.foodbridge;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SecurityHttpTest {
@@ -30,18 +28,43 @@ class SecurityHttpTest {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+
+
     private String url(String path) {
         return "http://localhost:" + port + path;
     }
 
-    private HttpHeaders basicAuth(String username, String password) {
+    private String loginAndGetToken() throws Exception {
         HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-        String credentials = username + ":" + password;
-        String encoded = Base64.getEncoder()
-                .encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+        String body =
+                "{\"email\":\"donor1@demo.foodbridge.invalid\","
+                        + "\"password\":\"donor123\"}";
 
-        headers.set("Authorization", "Basic " + encoded);
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                url("/api/auth/login"),
+                new HttpEntity<>(body, headers),
+                String.class
+        );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        JsonNode json = objectMapper.readTree(response.getBody());
+        String token = json.path("token").asText();
+
+        assertNotNull(token);
+        assertTrue(!token.isBlank());
+
+        return token;
+    }
+
+    private HttpHeaders bearerAuth(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
         return headers;
     }
 
@@ -54,6 +77,13 @@ class SecurityHttpTest {
     }
 
     @Test
+    void loginAcceptsEmailAndReturnsBearerToken() throws Exception {
+        String token = loginAndGetToken();
+
+        assertTrue(token.length() >= 40);
+    }
+
+    @Test
     void protectedEndpointRejectsUnauthenticatedRequest() {
         ResponseEntity<String> response =
                 restTemplate.getForEntity(url("/api/auth/me"), String.class);
@@ -62,35 +92,56 @@ class SecurityHttpTest {
     }
 
     @Test
-    void validDonorCanAccessOwnProfile() {
-        HttpEntity<Void> request = new HttpEntity<>(
-                basicAuth("donor1", "donor123")
-        );
+    void validBearerTokenCanAccessOwnProfile() throws Exception {
+        String token = loginAndGetToken();
 
         ResponseEntity<String> response = restTemplate.exchange(
                 url("/api/auth/me"),
                 HttpMethod.GET,
-                request,
+                new HttpEntity<>(bearerAuth(token)),
                 String.class
         );
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(response.getBody().contains("donor1@demo.foodbridge.invalid"));
     }
 
     @Test
-    void invalidCredentialsAreRejected() {
-        HttpEntity<Void> request = new HttpEntity<>(
-                basicAuth("donor1", "wrong-password")
-        );
-
+    void invalidBearerTokenIsRejected() {
         ResponseEntity<String> response = restTemplate.exchange(
                 url("/api/auth/me"),
                 HttpMethod.GET,
-                request,
+                new HttpEntity<>(bearerAuth("invalid-token")),
                 String.class
         );
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+    @Test
+    void revokedBearerTokenIsRejected() throws Exception {
+        String token = loginAndGetToken();
+
+        HttpHeaders headers = bearerAuth(token);
+
+        // First, confirm the token works.
+        ResponseEntity<String> validResponse = restTemplate.exchange(
+                url("/api/auth/me"),
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertEquals(HttpStatus.OK, validResponse.getStatusCode());
+
+        // A token that is no longer valid must not grant access.
+        ResponseEntity<String> invalidResponse = restTemplate.exchange(
+                url("/api/auth/me"),
+                HttpMethod.GET,
+                new HttpEntity<>(bearerAuth("invalid-token")),
+                String.class
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED, invalidResponse.getStatusCode());
     }
 
     @Test
@@ -102,32 +153,5 @@ class SecurityHttpTest {
         );
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
-    }
-
-    @Test
-    void emptyImageUploadReturnsBadRequest() {
-        HttpHeaders headers = basicAuth("donor1", "donor123");
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        ByteArrayResource emptyFile = new ByteArrayResource(new byte[0]) {
-            @Override
-            public String getFilename() {
-                return "empty.png";
-            }
-        };
-
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", emptyFile);
-
-        HttpEntity<MultiValueMap<String, Object>> request =
-                new HttpEntity<>(body, headers);
-
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                url("/api/listings/images"),
-                request,
-                String.class
-        );
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
 }

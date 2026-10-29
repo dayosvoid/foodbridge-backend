@@ -1,4 +1,3 @@
-
 openapi: 3.0.3
 
 info:
@@ -9,14 +8,14 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
-  - url: https://YOUR-FOODBRIDGE-RENDER-URL.onrender.com
-    description: Replace with the actual Render deployment URL
+  - url: https://foodbridge-backend-rg9f.onrender.com
+    description: Production server on Render
 
 paths:
   /api/auth/login:
     post:
       operationId: login
-      summary: Authenticate a user
+      summary: Authenticate a user using email
       security: []
       requestBody:
         required: true
@@ -31,6 +30,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing or invalid login fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Invalid credentials
 
@@ -39,7 +44,7 @@ paths:
       operationId: getCurrentUser
       summary: Get current user profile
       security:
-        - basicAuth: []
+        - bearerAuth: []
       responses:
         '200':
           description: Current authenticated user
@@ -56,7 +61,7 @@ paths:
       summary: Upload a listing image to Cloudinary
       description: Upload an image and return its hosted URL for use when creating a listing.
       security:
-        - basicAuth: []
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -84,6 +89,10 @@ paths:
                     format: uri
         '400':
           description: Invalid or empty image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Authentication required
         '500':
@@ -166,7 +175,7 @@ paths:
       operationId: createListing
       summary: Create a food listing
       security:
-        - basicAuth: []
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -222,7 +231,7 @@ paths:
       operationId: getListingRequests
       summary: Get requests for a listing
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: listingId
           in: path
@@ -250,7 +259,7 @@ paths:
       operationId: requestFoodListing
       summary: Request a food listing
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: listingId
           in: path
@@ -299,7 +308,7 @@ paths:
       operationId: getMyRequests
       summary: Get the authenticated recipient's requests
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: mine
           in: query
@@ -333,7 +342,7 @@ paths:
       operationId: getFoodRequest
       summary: Get a food request
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: requestId
           in: path
@@ -364,7 +373,7 @@ paths:
       operationId: approveFoodRequest
       summary: Approve a food request
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: requestId
           in: path
@@ -401,7 +410,7 @@ paths:
       operationId: declineFoodRequest
       summary: Decline a food request
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: requestId
           in: path
@@ -438,7 +447,7 @@ paths:
       operationId: cancelFoodRequest
       summary: Cancel own pending food request
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: requestId
           in: path
@@ -472,19 +481,21 @@ paths:
 
 components:
   securitySchemes:
-    basicAuth:
+    bearerAuth:
       type: http
-      scheme: basic
+      scheme: bearer
+      bearerFormat: opaque
 
   schemas:
     LoginRequest:
       type: object
       required:
-        - username
+        - email
         - password
       properties:
-        username:
+        email:
           type: string
+          format: email
         password:
           type: string
           format: password
@@ -492,7 +503,7 @@ components:
     CreateListingRequest:
       type: object
       required:
-        - title
+        - foodName
         - description
         - category
         - quantity
@@ -500,7 +511,7 @@ components:
         - pickupArea
         - collectionDeadline
       properties:
-        title:
+        foodName:
           type: string
         description:
           type: string
@@ -537,14 +548,14 @@ components:
       type: object
       required:
         - id
-        - title
+        - foodName
         - description
         - category
         - quantity
         - unit
         - pickupArea
         - collectionDeadline
-        - state
+        - status
         - donorId
         - donorName
         - createdAt
@@ -553,7 +564,7 @@ components:
         id:
           type: string
           format: uuid
-        title:
+        foodName:
           type: string
         description:
           type: string
@@ -571,7 +582,7 @@ components:
         collectionDeadline:
           type: string
           format: date-time
-        state:
+        status:
           type: string
           enum:
             - AVAILABLE
@@ -596,9 +607,9 @@ components:
       required:
         - id
         - listingId
-        - requesterId
-        - requesterName
-        - state
+        - recipientId
+        - recipientName
+        - status
         - createdAt
       properties:
         id:
@@ -607,12 +618,12 @@ components:
         listingId:
           type: string
           format: uuid
-        requesterId:
+        recipientId:
           type: string
           format: uuid
-        requesterName:
+        recipientName:
           type: string
-        state:
+        status:
           type: string
           enum:
             - PENDING
@@ -632,9 +643,11 @@ components:
         - name
         - role
         - organisationName
+        - email
       properties:
         token:
           type: string
+          description: Opaque Bearer token used to authenticate subsequent requests.
         id:
           type: string
         name:
@@ -647,6 +660,9 @@ components:
             - ADMIN
         organisationName:
           type: string
+        email:
+          type: string
+          format: email
 
     MeResponse:
       type: object
@@ -655,6 +671,7 @@ components:
         - name
         - role
         - organisationName
+        - email
       properties:
         id:
           type: string
@@ -668,6 +685,9 @@ components:
             - ADMIN
         organisationName:
           type: string
+        email:
+          type: string
+          format: email
 
     ErrorResponse:
       type: object
