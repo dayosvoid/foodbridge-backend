@@ -1,5 +1,6 @@
 package com.tesa.foodbridge.listing.web;
 
+import com.tesa.foodbridge.cloudinary.CloudinaryService;
 import com.tesa.foodbridge.listing.api.CreateListingRequest;
 import com.tesa.foodbridge.listing.api.ListingOperations;
 import com.tesa.foodbridge.listing.api.ListingResponse;
@@ -12,9 +13,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -23,13 +28,16 @@ public class ListingController {
 
     private final ListingOperations listings;
     private final ActorFactory actorFactory;
+    private final CloudinaryService cloudinaryService;
 
     public ListingController(
             ListingOperations listings,
-            ActorFactory actorFactory) {
+            ActorFactory actorFactory,
+            CloudinaryService cloudinaryService) {
 
         this.listings = listings;
         this.actorFactory = actorFactory;
+        this.cloudinaryService = cloudinaryService;
     }
 
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -58,6 +66,22 @@ public class ListingController {
                         )
                 )
         );
+    }
+
+    @PostMapping(
+            value = "/images",
+            consumes = "multipart/form-data"
+    )
+    public Map<String, String> uploadImage(
+            @RequestParam("file") MultipartFile file) throws IOException {
+
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Image file cannot be empty");
+        }
+
+        String imageUrl = cloudinaryService.uploadImage(file);
+
+        return Map.of("imageUrl", imageUrl);
     }
 
     @GetMapping
