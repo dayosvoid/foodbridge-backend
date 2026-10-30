@@ -1,9 +1,12 @@
+
 package com.tesa.foodbridge.shared;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
 
@@ -23,6 +26,17 @@ public class ApiExceptionHandler {
         return new ErrorResponse(
                 "INVALID_REQUEST",
                 "Request validation failed",
+                Instant.now()
+        );
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ErrorResponse invalidArgument(IllegalArgumentException e) {
+
+        return new ErrorResponse(
+                "INVALID_REQUEST",
+                e.getMessage(),
                 Instant.now()
         );
     }
