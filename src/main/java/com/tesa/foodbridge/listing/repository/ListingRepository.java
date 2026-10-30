@@ -26,19 +26,11 @@ public class ListingRepository {
                     r.getString("unit"),
                     r.getString("image_url"),
                     r.getString("pickup_area"),
-                    r.getTimestamp(
-                            "collection_deadline"
-                    ).toInstant(),
+                    r.getTimestamp("collection_deadline").toInstant(),
                     r.getString("status"),
-                    r.getTimestamp(
-                            "created_at"
-                    ).toInstant(),
-                    r.getTimestamp(
-                            "updated_at"
-                    ).toInstant(),
-                    r.getInt(
-                            "pending_request_count"
-                    )
+                    r.getTimestamp("created_at").toInstant(),
+                    r.getTimestamp("updated_at").toInstant(),
+                    r.getInt("pending_request_count")
             );
 
     private static final String SELECT = """
@@ -51,132 +43,119 @@ public class ListingRepository {
         join users u on u.id=l.donor_id
         """;
 
-    public ListingRepository(
-            JdbcTemplate jdbc) {
-
+    public ListingRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    public ListingView insert(
-            UUID id,
-            UUID donor,
-            CreateListing c) {
+    public ListingView insert(UUID id, UUID donor, CreateListing c) {
 
         jdbc.update("""
             insert into listings(
-                id,
-                donor_id,
-                title,
-                description,
-                category,
-                quantity,
-                unit,
-                image_url,
-                pickup_area,
+                id, donor_id, title, description, category,
+                quantity, unit, image_url, pickup_area,
                 collection_deadline
             )
             values (?,?,?,?,?,?,?,?,?,?)
             """,
-                id,
-                donor,
-                c.title(),
-                c.description(),
-                c.category(),
-                c.quantity(),
-                c.unit(),
-                c.imageUrl(),
+                id, donor, c.title(), c.description(),
+                c.category(), c.quantity(), c.unit(),
+                c.imageUrl(), c.pickupArea(),
+                Timestamp.from(c.collectionDeadline())
+        );
+
+        return find(id).getFirst();
+    }
+
+    public boolean update(UUID id, CreateListing c) {
+
+        return jdbc.update("""
+            update listings
+            set title=?,
+                description=?,
+                category=?,
+                quantity=?,
+                unit=?,
+                image_url=?,
+                pickup_area=?,
+                collection_deadline=?,
+                updated_at=clock_timestamp()
+            where id=?
+              and status='AVAILABLE'
+            """,
+                c.title(), c.description(), c.category(),
+                c.quantity(), c.unit(), c.imageUrl(),
                 c.pickupArea(),
-                Timestamp.from(
-                        c.collectionDeadline()
-                )
-        );
-
-        return jdbc.queryForObject(
-                SELECT + " where l.id=?",
-                MAPPER,
+                Timestamp.from(c.collectionDeadline()),
                 id
-        );
+        ) == 1;
     }
 
-    public List<ListingView> findLocked(
-            UUID id) {
+    public boolean softDelete(UUID id) {
 
+        return jdbc.update("""
+            update listings
+            set status='DELETED',
+                updated_at=clock_timestamp()
+            where id=?
+              and status='AVAILABLE'
+            """, id) == 1;
+    }
+
+    public List<ListingView> findLocked(UUID id) {
         return jdbc.query(
-                SELECT
-                        + " where l.id=? for update of l",
-                MAPPER,
-                id
+                SELECT + " where l.id=? for update of l",
+                MAPPER, id
         );
     }
 
-    public List<ListingView> find(
-            UUID id) {
-
+    public List<ListingView> find(UUID id) {
         return jdbc.query(
                 SELECT + " where l.id=?",
-                MAPPER,
-                id
+                MAPPER, id
         );
     }
 
-    public List<ListingView> browse(
-            int offset,
-            int limit) {
-
+    public List<ListingView> browse(int offset, int limit) {
         return jdbc.query(
-                SELECT
-                        + " order by l.created_at desc,l.id "
-                        + "limit ? offset ?",
-                MAPPER,
-                limit,
-                offset
+                SELECT + """
+                     where l.status <> 'DELETED'
+                     order by l.created_at desc,l.id
+                     limit ? offset ?
+                     """,
+                MAPPER, limit, offset
         );
     }
 
     public List<ListingView> browseMine(
-            UUID donorId,
-            int offset,
-            int limit) {
+            UUID donorId, int offset, int limit) {
 
         return jdbc.query(
-                SELECT
-                        + " where l.donor_id=? "
-                        + "order by l.created_at desc,l.id "
-                        + "limit ? offset ?",
-                MAPPER,
-                donorId,
-                limit,
-                offset
+                SELECT + """
+                     where l.donor_id=?
+                       and l.status <> 'DELETED'
+                     order by l.created_at desc,l.id
+                     limit ? offset ?
+                     """,
+                MAPPER, donorId, limit, offset
         );
     }
 
-    public boolean deadlinePassed(
-            UUID id) {
-
+    public boolean deadlinePassed(UUID id) {
         return Boolean.TRUE.equals(
-                jdbc.queryForObject(
-                        """
-                        select collection_deadline
-                               <= clock_timestamp()
-                        from listings
-                        where id=?
-                        """,
-                        Boolean.class,
-                        id
-                )
+                jdbc.queryForObject("""
+                    select collection_deadline <= clock_timestamp()
+                    from listings where id=?
+                    """,
+                        Boolean.class, id)
         );
     }
 
     public void reserve(UUID id) {
-
-        jdbc.update(
-                """
-                update listings
-                set status='RESERVED',
-                    updated_at=clock_timestamp()
-                where id=?
-                """,
-                id
-        );
+        jdbc.update("""
+            update listings
+            set status='RESERVED',
+                updated_at=clock_timestamp()
+            where id=?
+            """, id);
     }
 }

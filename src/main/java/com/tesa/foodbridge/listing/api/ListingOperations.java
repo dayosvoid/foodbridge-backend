@@ -40,6 +40,10 @@ public interface ListingOperations {
 
     ListingView create(Actor actor, CreateListing command);
 
+    ListingView update(Actor actor, UUID id, CreateListing command);
+
+    void delete(Actor actor, UUID id);
+
     ListingView get(UUID id);
 
     List<ListingView> browse(int offset, int limit);
@@ -52,10 +56,7 @@ public interface ListingOperations {
 
     ListingView lockForRequest(UUID id);
 
-    ListingView lockForApproval(
-            UUID id,
-            Actor actor
-    );
+    ListingView lockForApproval(UUID id, Actor actor);
 
     void markReserved(UUID id);
 }
