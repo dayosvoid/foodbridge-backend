@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.auth.api;
 
 public record LoginResponse(
@@ -5,5 +6,6 @@ public record LoginResponse(
         String id,
         String name,
         String role,
-        String organisationName
+        String organisationName,
+        String email
 ) {}

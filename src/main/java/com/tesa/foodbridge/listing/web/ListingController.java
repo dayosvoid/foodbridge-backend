@@ -12,11 +12,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +39,7 @@ public class ListingController {
     }
 
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "basicAuth"
+            name = "bearerAuth"
     )
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -55,10 +53,10 @@ public class ListingController {
                 listings.create(
                         actor,
                         new ListingOperations.CreateListing(
-                                request.title(),
+                                request.foodName(),
                                 request.description(),
                                 request.category(),
-                                BigDecimal.valueOf(request.quantity()),
+                                request.quantity(),
                                 request.unit(),
                                 request.imageReference(),
                                 request.pickupArea(),
@@ -76,7 +74,9 @@ public class ListingController {
             @RequestParam("file") MultipartFile file) throws IOException {
 
         if (file.isEmpty()) {
-            throw new IllegalArgumentException("Image file cannot be empty");
+            throw new IllegalArgumentException(
+                    "Image file cannot be empty"
+            );
         }
 
         String imageUrl = cloudinaryService.uploadImage(file);
@@ -86,27 +86,13 @@ public class ListingController {
 
     @GetMapping
     public List<ListingResponse> browse(
-            @RequestParam(required = false)
-            String category,
-
-            @RequestParam(required = false)
-            String pickupArea,
-
-            @RequestParam(required = false)
-            String availability,
-
-            @RequestParam(required = false)
-            String keyword,
-
-            @RequestParam(defaultValue = "false")
-            boolean mine,
-
-            @RequestParam(defaultValue = "0")
-            int offset,
-
-            @RequestParam(defaultValue = "50")
-            int limit,
-
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String pickupArea,
+            @RequestParam(required = false) String availability,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "false") boolean mine,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "50") int limit,
             Authentication authentication) {
 
         List<ListingOperations.ListingView> result;
@@ -118,51 +104,35 @@ public class ListingController {
                     limit
             );
         } else {
-            result = listings.browse(
-                    offset,
-                    limit
-            );
+            result = listings.browse(offset, limit);
         }
 
         return result.stream()
-
                 .filter(l ->
                         availability == null
-                                || l.status()
-                                .equalsIgnoreCase(availability)
+                                || l.status().equalsIgnoreCase(availability)
                 )
-
                 .filter(l ->
                         category == null
-                                || l.category()
-                                .equalsIgnoreCase(category)
+                                || l.category().equalsIgnoreCase(category)
                 )
-
                 .filter(l ->
                         pickupArea == null
-                                || l.pickupArea()
-                                .equalsIgnoreCase(pickupArea)
+                                || l.pickupArea().equalsIgnoreCase(pickupArea)
                 )
-
                 .filter(l ->
                         keyword == null
                                 || (l.title() != null
-                                && l.title()
-                                .toLowerCase()
+                                && l.title().toLowerCase()
                                 .contains(keyword.toLowerCase()))
-
                                 || (l.description() != null
-                                && l.description()
-                                .toLowerCase()
+                                && l.description().toLowerCase()
                                 .contains(keyword.toLowerCase()))
                 )
-
                 .filter(l ->
-                        !l.collectionDeadline()
-                                .isBefore(Instant.now())
+                        !l.collectionDeadline().isBefore(Instant.now())
                                 || "EXPIRED".equalsIgnoreCase(l.status())
                 )
-
                 .map(this::toResponse)
                 .toList();
     }
@@ -171,9 +141,7 @@ public class ListingController {
     public ListingResponse get(
             @PathVariable UUID listingId) {
 
-        return toResponse(
-                listings.get(listingId)
-        );
+        return toResponse(listings.get(listingId));
     }
 
     private ListingResponse toResponse(

@@ -5,8 +5,8 @@ import java.time.Instant;
 public record FoodRequestResponse(
         String id,
         String listingId,
-        String requesterId,
-        String requesterName,
-        String state,
+        String recipientId,
+        String recipientName,
+        String status,
         Instant createdAt
 ) {}

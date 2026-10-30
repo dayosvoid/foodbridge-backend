@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.auth.service;
 
 import com.tesa.foodbridge.auth.api.MeResponse;
@@ -14,7 +15,8 @@ public class UserProfileService {
                     com.tesa.foodbridge.demo.DemoSeed.id("donor1").toString(),
                     "Fresh Foods Bakery",
                     "DONOR",
-                    "Fresh Foods Bakery"
+                    "Fresh Foods Bakery",
+                    "donor1@demo.foodbridge.invalid"
             ),
 
             "recipient1",
@@ -22,7 +24,8 @@ public class UserProfileService {
                     com.tesa.foodbridge.demo.DemoSeed.id("recipient1").toString(),
                     "Hope Community",
                     "RECIPIENT",
-                    "Hope Community"
+                    "Hope Community",
+                    "recipient1@demo.foodbridge.invalid"
             ),
 
             "admin1",
@@ -30,7 +33,8 @@ public class UserProfileService {
                     com.tesa.foodbridge.demo.DemoSeed.id("admin").toString(),
                     "FoodBridge Admin",
                     "ADMIN",
-                    "FoodBridge"
+                    "FoodBridge",
+                    "admin@demo.foodbridge.invalid"
             )
     );
 
@@ -41,7 +45,8 @@ public class UserProfileService {
                         username,
                         username,
                         "USER",
-                        username
+                        username,
+                        null
                 )
         );
     }
