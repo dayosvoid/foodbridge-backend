@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public record ListingResponse(
         String id,
-        String title,
+        String foodName,
         String description,
         String category,
         BigDecimal quantity,
@@ -13,7 +13,7 @@ public record ListingResponse(
         String imageReference,
         String pickupArea,
         Instant collectionDeadline,
-        String state,
+        String status,
         String donorId,
         String donorName,
         Instant createdAt,
