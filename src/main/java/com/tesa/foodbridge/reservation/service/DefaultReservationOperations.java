@@ -7,6 +7,7 @@ import com.tesa.foodbridge.handover.api.HandoverOperations;
 import com.tesa.foodbridge.activity.api.ActivityRecorder;
 import com.tesa.foodbridge.user.api.UserDirectory;
 import com.tesa.foodbridge.shared.*;
+import com.tesa.foodbridge.distribution.api.DailyDistributionOperations;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class DefaultReservationOperations
     private final HandoverOperations handovers;
     private final ActivityRecorder activity;
     private final UserDirectory users;
+    private final DailyDistributionOperations dailyDistribution;
     private final TransactionTemplate tx;
 
     public DefaultReservationOperations(
@@ -34,6 +36,7 @@ public class DefaultReservationOperations
             HandoverOperations handovers,
             ActivityRecorder activity,
             UserDirectory users,
+            DailyDistributionOperations dailyDistribution,
             PlatformTransactionManager manager) {
 
         this.requests = requests;
@@ -41,17 +44,16 @@ public class DefaultReservationOperations
         this.handovers = handovers;
         this.activity = activity;
         this.users = users;
+        this.dailyDistribution = dailyDistribution;
 
         tx = new TransactionTemplate(manager);
 
         tx.setPropagationBehavior(
-                TransactionDefinition
-                        .PROPAGATION_REQUIRES_NEW
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW
         );
 
         tx.setIsolationLevel(
-                TransactionDefinition
-                        .ISOLATION_READ_COMMITTED
+                TransactionDefinition.ISOLATION_READ_COMMITTED
         );
     }
 
@@ -95,17 +97,14 @@ public class DefaultReservationOperations
                     }
                 }
 
-                listings.lockForRequest(
-                        listingId
-                );
+                listings.lockForRequest(listingId);
 
-                var result =
-                        requests.insert(
-                                UUID.randomUUID(),
-                                listingId,
-                                actor.id(),
-                                key
-                        );
+                var result = requests.insert(
+                        UUID.randomUUID(),
+                        listingId,
+                        actor.id(),
+                        key
+                );
 
                 activity.record(
                         actor.id(),
@@ -116,8 +115,7 @@ public class DefaultReservationOperations
                 return result;
             });
 
-        } catch (
-                DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException e) {
 
             if (key != null
                     && unique(
@@ -129,9 +127,7 @@ public class DefaultReservationOperations
                         s -> replay(
                                 requests
                                         .byKey(key)
-                                        .orElseThrow(
-                                                () -> e
-                                        ),
+                                        .orElseThrow(() -> e),
                                 actor,
                                 listingId
                         )
@@ -147,10 +143,8 @@ public class DefaultReservationOperations
             Actor actor,
             UUID listing) {
 
-        if (!old.requesterId()
-                .equals(actor.id())
-                || !old.listingId()
-                .equals(listing)) {
+        if (!old.requesterId().equals(actor.id())
+                || !old.listingId().equals(listing)) {
 
             throw new RuleViolation(
                     "IDEMPOTENCY_KEY_REUSED"
@@ -168,21 +162,15 @@ public class DefaultReservationOperations
 
             var request = required(id);
 
-            var listing =
-                    listings.get(
-                            request.listingId()
-                    );
+            var listing = listings.get(
+                    request.listingId()
+            );
 
             if (actor.role() != Actor.Role.ADMIN
                     && (actor.role() != Actor.Role.DONOR
-                    || !actor.id()
-                    .equals(
-                            listing.donorId()
-                    ))) {
+                    || !actor.id().equals(listing.donorId()))) {
 
-                throw new RuleViolation(
-                        "FORBIDDEN"
-                );
+                throw new RuleViolation("FORBIDDEN");
             }
 
             users.requireRole(
@@ -190,8 +178,7 @@ public class DefaultReservationOperations
                     actor.role()
             );
 
-            if (!request.status()
-                    .equals("PENDING")
+            if (!request.status().equals("PENDING")
                     || !requests.decline(id)) {
 
                 throw new RuleViolation(
@@ -213,12 +200,8 @@ public class DefaultReservationOperations
             Actor actor,
             UUID id) {
 
-        if (actor.role()
-                != Actor.Role.RECIPIENT) {
-
-            throw new RuleViolation(
-                    "FORBIDDEN"
-            );
+        if (actor.role() != Actor.Role.RECIPIENT) {
+            throw new RuleViolation("FORBIDDEN");
         }
 
         users.requireRole(
@@ -230,20 +213,12 @@ public class DefaultReservationOperations
 
             var request = required(id);
 
-            if (!request.requesterId()
-                    .equals(actor.id())) {
-
-                throw new RuleViolation(
-                        "FORBIDDEN"
-                );
+            if (!request.requesterId().equals(actor.id())) {
+                throw new RuleViolation("FORBIDDEN");
             }
 
-            if (!request.status()
-                    .equals("PENDING")
-                    || !requests.cancel(
-                    id,
-                    actor.id()
-            )) {
+            if (!request.status().equals("PENDING")
+                    || !requests.cancel(id, actor.id())) {
 
                 throw new RuleViolation(
                         "REQUEST_NOT_PENDING"
@@ -264,21 +239,13 @@ public class DefaultReservationOperations
             Actor actor,
             UUID listingId) {
 
-        var listing =
-                listings.get(listingId);
+        var listing = listings.get(listingId);
 
-        if (actor.role()
-                != Actor.Role.ADMIN
-                && (actor.role()
-                != Actor.Role.DONOR
-                || !actor.id()
-                .equals(
-                        listing.donorId()
-                ))) {
+        if (actor.role() != Actor.Role.ADMIN
+                && (actor.role() != Actor.Role.DONOR
+                || !actor.id().equals(listing.donorId()))) {
 
-            throw new RuleViolation(
-                    "FORBIDDEN"
-            );
+            throw new RuleViolation("FORBIDDEN");
         }
 
         users.requireRole(
@@ -286,20 +253,14 @@ public class DefaultReservationOperations
                 actor.role()
         );
 
-        return requests.findForListing(
-                listingId
-        );
+        return requests.findForListing(listingId);
     }
 
     public java.util.List<RequestView> mine(
             Actor actor) {
 
-        if (actor.role()
-                != Actor.Role.RECIPIENT) {
-
-            throw new RuleViolation(
-                    "FORBIDDEN"
-            );
+        if (actor.role() != Actor.Role.RECIPIENT) {
+            throw new RuleViolation("FORBIDDEN");
         }
 
         users.requireRole(
@@ -307,9 +268,7 @@ public class DefaultReservationOperations
                 actor.role()
         );
 
-        return requests.findMine(
-                actor.id()
-        );
+        return requests.findMine(actor.id());
     }
 
     public RequestView approve(
@@ -320,27 +279,31 @@ public class DefaultReservationOperations
 
             return tx.execute(s -> {
 
-                var request =
-                        required(id);
+                var request = required(id);
 
                 listings.lockForApproval(
                         request.listingId(),
                         actor
                 );
 
-                if (!request.status()
-                        .equals("PENDING")
-                        || !requests.approve(id)) {
-
+                if (!request.status().equals("PENDING")) {
                     throw new RuleViolation(
                             "REQUEST_NOT_PENDING"
                     );
                 }
 
-                handovers
-                        .createForApprovedRequest(
-                                id
-                        );
+                // Apply the daily fairness rule before approval.
+                dailyDistribution.assertRecipientEligibleForApproval(
+                        request.requesterId()
+                );
+
+                if (!requests.approve(id)) {
+                    throw new RuleViolation(
+                            "REQUEST_NOT_PENDING"
+                    );
+                }
+
+                handovers.createForApprovedRequest(id);
 
                 listings.markReserved(
                         request.listingId()
@@ -355,8 +318,7 @@ public class DefaultReservationOperations
                 return required(id);
             });
 
-        } catch (
-                DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException e) {
 
             if (unique(
                     e,
@@ -370,11 +332,7 @@ public class DefaultReservationOperations
 
         } catch (RuleViolation e) {
 
-            if (e.code()
-                    .equals(
-                            "LISTING_ALREADY_RESERVED"
-                    )) {
-
+            if (e.code().equals("LISTING_ALREADY_RESERVED")) {
                 throw new ListingAlreadyReserved();
             }
 
@@ -382,11 +340,9 @@ public class DefaultReservationOperations
         }
     }
 
-    private RequestView required(
-            UUID id) {
+    private RequestView required(UUID id) {
 
-        return requests
-                .find(id)
+        return requests.find(id)
                 .orElseThrow(
                         () -> new RuleViolation(
                                 "REQUEST_NOT_FOUND"
@@ -405,20 +361,14 @@ public class DefaultReservationOperations
 
         var r = required(id);
 
-        if (actor.role()
-                != Actor.Role.ADMIN
-                && !actor.id()
-                .equals(r.requesterId())
-                && !(actor.role()
-                == Actor.Role.DONOR
-                && listings
-                .get(r.listingId())
+        if (actor.role() != Actor.Role.ADMIN
+                && !actor.id().equals(r.requesterId())
+                && !(actor.role() == Actor.Role.DONOR
+                && listings.get(r.listingId())
                 .donorId()
                 .equals(actor.id()))) {
 
-            throw new RuleViolation(
-                    "FORBIDDEN"
-            );
+            throw new RuleViolation("FORBIDDEN");
         }
 
         return r;
@@ -428,22 +378,12 @@ public class DefaultReservationOperations
             Throwable e,
             String constraint) {
 
-        for (
-                Throwable c = e;
-                c != null;
-                c = c.getCause()
-        ) {
+        for (Throwable c = e; c != null; c = c.getCause()) {
 
             if (c instanceof SQLException sql
-                    && "23505"
-                    .equals(
-                            sql.getSQLState()
-                    )
+                    && "23505".equals(sql.getSQLState())
                     && sql.getMessage() != null
-                    && sql.getMessage()
-                    .contains(
-                            constraint
-                    )) {
+                    && sql.getMessage().contains(constraint)) {
 
                 return true;
             }

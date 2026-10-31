@@ -8,15 +8,15 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
-  - url: https://foodbridge-backend-rg9f.onrender.com
-    description: Production server on Render
+
+  - url: https://YOUR-FOODBRIDGE-RENDER-URL.onrender.com
+    description: Render deployment
 
 paths:
+
   /api/auth/login:
     post:
-      operationId: login
-      summary: Authenticate a user using email
-      security: []
+      summary: Authenticate a user
       requestBody:
         required: true
         content:
@@ -30,21 +30,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
-        '400':
-          description: Missing or invalid login fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Invalid credentials
 
   /api/auth/me:
     get:
-      operationId: getCurrentUser
       summary: Get current user profile
       security:
-        - bearerAuth: []
+        - basicAuth: []
       responses:
         '200':
           description: Current authenticated user
@@ -55,68 +48,22 @@ paths:
         '401':
           description: Authentication required
 
-  /api/listings/images:
-    post:
-      operationId: uploadListingImage
-      summary: Upload a listing image to Cloudinary
-      description: Upload an image and return its hosted URL for use when creating a listing.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required:
-                - file
-              properties:
-                file:
-                  type: string
-                  format: binary
-      responses:
-        '200':
-          description: Image uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - imageUrl
-                properties:
-                  imageUrl:
-                    type: string
-                    format: uri
-        '400':
-          description: Invalid or empty image
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Authentication required
-        '500':
-          description: Image upload failed
-
   /api/listings:
     get:
-      operationId: browseListings
       summary: Browse food listings
-      security: []
       parameters:
         - name: category
           in: query
-          required: false
           schema:
             type: string
+
         - name: pickupArea
           in: query
-          required: false
           schema:
             type: string
+
         - name: availability
           in: query
-          required: false
           schema:
             type: string
             enum:
@@ -125,32 +72,33 @@ paths:
               - COLLECTED
               - REVERSED
               - EXPIRED
+
         - name: keyword
           in: query
-          required: false
           schema:
             type: string
+
         - name: mine
           in: query
-          required: false
           schema:
             type: boolean
             default: false
+
         - name: offset
           in: query
-          required: false
           schema:
             type: integer
             minimum: 0
             default: 0
+
         - name: limit
           in: query
-          required: false
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 50
+
       responses:
         '200':
           description: Listings returned
@@ -160,22 +108,17 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ListingResponse'
-        '400':
-          description: Invalid listing query parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '401':
           description: Authentication required when mine=true
+
         '403':
           description: Donor or admin required when mine=true
 
     post:
-      operationId: createListing
       summary: Create a food listing
       security:
-        - bearerAuth: []
+        - basicAuth: []
       requestBody:
         required: true
         content:
@@ -189,22 +132,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
+
         '400':
           description: Invalid listing data
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
         '401':
           description: Authentication required
+
         '403':
           description: Donor role required
 
   /api/listings/{listingId}:
     get:
-      operationId: getListing
       summary: Get a food listing
-      security: []
       parameters:
         - name: listingId
           in: path
@@ -219,6 +163,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
+
         '404':
           description: Listing not found
           content:
@@ -228,10 +173,9 @@ paths:
 
   /api/listings/{listingId}/requests:
     get:
-      operationId: getListingRequests
       summary: Get requests for a listing
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: listingId
           in: path
@@ -248,18 +192,20 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FoodRequest'
+
         '401':
           description: Authentication required
+
         '403':
           description: Donor owner or admin required
+
         '404':
           description: Listing not found
 
     post:
-      operationId: requestFoodListing
       summary: Request a food listing
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: listingId
           in: path
@@ -267,12 +213,14 @@ paths:
           schema:
             type: string
             format: uuid
+
         - name: Idempotency-Key
           in: header
           required: true
           schema:
             type: string
             maxLength: 200
+
       responses:
         '201':
           description: Request created
@@ -280,22 +228,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-        '400':
-          description: Invalid request or missing required header
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '401':
           description: Authentication required
+
         '403':
           description: Recipient role required
-        '404':
-          description: Listing not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '409':
           description: Listing unavailable or idempotency key reused
           content:
@@ -305,10 +244,9 @@ paths:
 
   /api/requests:
     get:
-      operationId: getMyRequests
       summary: Get the authenticated recipient's requests
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: mine
           in: query
@@ -326,23 +264,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FoodRequest'
-        '400':
-          description: The mine parameter must be true
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '401':
           description: Authentication required
+
         '403':
           description: Recipient role required
 
   /api/requests/{requestId}:
     get:
-      operationId: getFoodRequest
       summary: Get a food request
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: requestId
           in: path
@@ -357,23 +290,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
+
         '401':
           description: Authentication required
+
         '403':
           description: Request owner, listing donor, or admin required
+
         '404':
           description: Request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /api/requests/{requestId}/approve:
     patch:
-      operationId: approveFoodRequest
       summary: Approve a food request
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: requestId
           in: path
@@ -388,18 +319,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
+
         '401':
           description: Authentication required
+
         '403':
           description: Donor owner or admin required
+
         '404':
           description: Request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '409':
-          description: Already reserved or request not pending
+          description: Already reserved, request not pending, or daily distribution priority restriction
           content:
             application/json:
               schema:
@@ -407,10 +338,9 @@ paths:
 
   /api/requests/{requestId}/decline:
     patch:
-      operationId: declineFoodRequest
       summary: Decline a food request
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: requestId
           in: path
@@ -425,16 +355,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
+
         '401':
           description: Authentication required
+
         '403':
           description: Donor owner or admin required
+
         '404':
           description: Request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '409':
           description: Request not pending
           content:
@@ -444,10 +374,9 @@ paths:
 
   /api/requests/{requestId}/cancel:
     post:
-      operationId: cancelFoodRequest
       summary: Cancel own pending food request
       security:
-        - bearerAuth: []
+        - basicAuth: []
       parameters:
         - name: requestId
           in: path
@@ -462,16 +391,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
+
         '401':
           description: Authentication required
+
         '403':
           description: Recipient owner required
+
         '404':
           description: Request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+
         '409':
           description: Request not pending
           content:
@@ -479,23 +408,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/admin/distribution/today:
+    get:
+      tags:
+        - Administration
+      operationId: getTodayDistribution
+      summary: Get today's fair-distribution status
+      description: Returns daily distribution statistics using Africa/Lagos calendar days.
+      security:
+        - basicAuth: []
+      responses:
+        '200':
+          description: Daily distribution status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyDistributionSummary'
+
+        '401':
+          description: Authentication required
+
+        '403':
+          description: Admin role required
+
 components:
+
   securitySchemes:
-    bearerAuth:
+    basicAuth:
       type: http
-      scheme: bearer
-      bearerFormat: opaque
+      scheme: basic
 
   schemas:
+
     LoginRequest:
       type: object
       required:
-        - email
+        - username
         - password
       properties:
-        email:
+        username:
           type: string
-          format: email
         password:
           type: string
           format: password
@@ -503,7 +455,7 @@ components:
     CreateListingRequest:
       type: object
       required:
-        - foodName
+        - title
         - description
         - category
         - quantity
@@ -511,10 +463,12 @@ components:
         - pickupArea
         - collectionDeadline
       properties:
-        foodName:
+        title:
           type: string
+
         description:
           type: string
+
         category:
           type: string
           enum:
@@ -524,9 +478,11 @@ components:
             - DAIRY
             - PANTRY
             - OTHER
+
         quantity:
           type: number
           minimum: 0
+
         unit:
           type: string
           enum:
@@ -535,11 +491,14 @@ components:
             - LITRES
             - ITEMS
             - BOXES
+
         imageReference:
           type: string
           nullable: true
+
         pickupArea:
           type: string
+
         collectionDeadline:
           type: string
           format: date-time
@@ -548,14 +507,14 @@ components:
       type: object
       required:
         - id
-        - foodName
+        - title
         - description
         - category
         - quantity
         - unit
         - pickupArea
         - collectionDeadline
-        - status
+        - state
         - donorId
         - donorName
         - createdAt
@@ -564,25 +523,34 @@ components:
         id:
           type: string
           format: uuid
-        foodName:
+
+        title:
           type: string
+
         description:
           type: string
+
         category:
           type: string
+
         quantity:
           type: number
+
         unit:
           type: string
+
         imageReference:
           type: string
           nullable: true
+
         pickupArea:
           type: string
+
         collectionDeadline:
           type: string
           format: date-time
-        status:
+
+        state:
           type: string
           enum:
             - AVAILABLE
@@ -590,14 +558,18 @@ components:
             - COLLECTED
             - REVERSED
             - EXPIRED
+
         donorId:
           type: string
           format: uuid
+
         donorName:
           type: string
+
         createdAt:
           type: string
           format: date-time
+
         pendingRequestCount:
           type: integer
           minimum: 0
@@ -607,23 +579,27 @@ components:
       required:
         - id
         - listingId
-        - recipientId
-        - recipientName
-        - status
+        - requesterId
+        - requesterName
+        - state
         - createdAt
       properties:
         id:
           type: string
           format: uuid
+
         listingId:
           type: string
           format: uuid
-        recipientId:
+
+        requesterId:
           type: string
           format: uuid
-        recipientName:
+
+        requesterName:
           type: string
-        status:
+
+        state:
           type: string
           enum:
             - PENDING
@@ -631,6 +607,7 @@ components:
             - DECLINED
             - CANCELLED
             - EXPIRED
+
         createdAt:
           type: string
           format: date-time
@@ -643,26 +620,25 @@ components:
         - name
         - role
         - organisationName
-        - email
       properties:
         token:
           type: string
-          description: Opaque Bearer token used to authenticate subsequent requests.
+
         id:
           type: string
+
         name:
           type: string
+
         role:
           type: string
           enum:
             - DONOR
             - RECIPIENT
             - ADMIN
+
         organisationName:
           type: string
-        email:
-          type: string
-          format: email
 
     MeResponse:
       type: object
@@ -671,23 +647,22 @@ components:
         - name
         - role
         - organisationName
-        - email
       properties:
         id:
           type: string
+
         name:
           type: string
+
         role:
           type: string
           enum:
             - DONOR
             - RECIPIENT
             - ADMIN
+
         organisationName:
           type: string
-        email:
-          type: string
-          format: email
 
     ErrorResponse:
       type: object
@@ -698,8 +673,43 @@ components:
       properties:
         code:
           type: string
+
         message:
           type: string
+
         timestamp:
           type: string
           format: date-time
+
+    DailyDistributionSummary:
+      type: object
+      required:
+        - totalRecipients
+        - availableListings
+        - approvedListingsToday
+        - recipientsServedToday
+        - recipientsWaitingToday
+        - firstRoundInProgress
+      properties:
+        totalRecipients:
+          type: integer
+          format: int64
+
+        availableListings:
+          type: integer
+          format: int64
+
+        approvedListingsToday:
+          type: integer
+          format: int64
+
+        recipientsServedToday:
+          type: integer
+          format: int64
+
+        recipientsWaitingToday:
+          type: integer
+          format: int64
+
+        firstRoundInProgress:
+          type: boolean
