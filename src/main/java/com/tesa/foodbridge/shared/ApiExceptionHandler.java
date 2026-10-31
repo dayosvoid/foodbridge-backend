@@ -1,4 +1,3 @@
-
 package com.tesa.foodbridge.shared;
 
 import org.springframework.http.HttpStatus;
@@ -59,7 +58,8 @@ public class ApiExceptionHandler {
             case "LISTING_ALREADY_RESERVED",
                  "LISTING_EXPIRED",
                  "REQUEST_NOT_PENDING",
-                 "IDEMPOTENCY_KEY_REUSED" ->
+                 "IDEMPOTENCY_KEY_REUSED",
+                 "DAILY_DISTRIBUTION_PRIORITY" ->
                     HttpStatus.CONFLICT;
 
             default ->
