@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.listing.service;
 
 import com.tesa.foodbridge.listing.api.ListingOperations;
@@ -8,6 +9,7 @@ import com.tesa.foodbridge.activity.api.ActivityRecorder;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Instant;
 import java.util.List;
@@ -49,8 +51,7 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     @Transactional
-    public ListingView update(
-            Actor actor, UUID id, CreateListing c) {
+    public ListingView update(Actor actor, UUID id, CreateListing c) {
 
         if (actor.role() != Actor.Role.DONOR)
             throw new RuleViolation("FORBIDDEN");
@@ -66,10 +67,7 @@ public class DefaultListingOperations implements ListingOperations {
         if (!existing.status().equals("AVAILABLE"))
             throw new RuleViolation("LISTING_NOT_EDITABLE");
 
-        if (!repository.update(id, c))
-            throw new RuleViolation("LISTING_NOT_EDITABLE");
-
-        return get(id);
+        return repository.update(id, c);
     }
 
     @Transactional
@@ -88,8 +86,7 @@ public class DefaultListingOperations implements ListingOperations {
         if (!existing.status().equals("AVAILABLE"))
             throw new RuleViolation("LISTING_NOT_DELETABLE");
 
-        if (!repository.softDelete(id))
-            throw new RuleViolation("LISTING_NOT_DELETABLE");
+        repository.softDelete(id);
     }
 
     private void validate(CreateListing c) {
@@ -120,7 +117,6 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     public List<ListingView> browse(int offset, int limit) {
-
         validatePage(offset, limit);
         return repository.browse(offset, limit);
     }
@@ -191,5 +187,12 @@ public class DefaultListingOperations implements ListingOperations {
     @Transactional(propagation = Propagation.MANDATORY)
     public void markReserved(UUID id) {
         repository.reserve(id);
+    }
+
+    // Automatically expire overdue listings every minute
+    @Scheduled(fixedRate = 60000)
+    @Transactional
+    public void expireListings() {
+        repository.expireDueListings();
     }
 }
