@@ -169,11 +169,20 @@ public class ListingController {
 
     @GetMapping("/{listingId}")
     public ListingResponse get(
-            @PathVariable UUID listingId) {
+            @PathVariable UUID listingId,Authentication authentication) {
 
         return toResponse(
-                listings.get(listingId)
+                authentication==null || !authentication.isAuthenticated()
+                        || authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken
+                        ? listings.getPublic(listingId)
+                        : listings.getHistorical(actorFactory.from(authentication),listingId)
         );
+    }
+
+    @DeleteMapping("/{listingId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID listingId, Authentication authentication) {
+        listings.delete(actorFactory.from(authentication), listingId);
     }
 
     private ListingResponse toResponse(

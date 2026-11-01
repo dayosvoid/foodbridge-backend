@@ -125,7 +125,7 @@ public class ListingRepository {
 
         return jdbc.query(
                 SELECT
-                        + " order by l.created_at desc,l.id "
+                        + " where l.status<>'DELETED' order by l.created_at desc,l.id "
                         + "limit ? offset ?",
                 MAPPER,
                 limit,
@@ -140,7 +140,7 @@ public class ListingRepository {
 
         return jdbc.query(
                 SELECT
-                        + " where l.donor_id=? "
+                        + " where l.donor_id=? and l.status<>'DELETED' "
                         + "order by l.created_at desc,l.id "
                         + "limit ? offset ?",
                 MAPPER,
@@ -178,5 +178,26 @@ public class ListingRepository {
                 """,
                 id
         );
+    }
+
+    /** Called while holding the listing row lock in the deletion transaction. */
+    public String archiveDetails(UUID id) {
+        return jdbc.queryForObject("""
+            select jsonb_build_object('previous_status', l.status,
+                'listing', to_jsonb(l))::text from listings l where l.id=?
+            """, String.class, id);
+    }
+
+    public void markDeleted(UUID id) {
+        jdbc.update("""
+            update listings set status='DELETED', updated_at=clock_timestamp()
+            where id=? and status<>'DELETED'
+            """, id);
+    }
+
+    public boolean hasRequest(UUID listingId,UUID requesterId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "select exists(select 1 from requests where listing_id=? and requester_id=?)",
+                Boolean.class,listingId,requesterId));
     }
 }

@@ -158,6 +158,21 @@ public class DefaultListingOperations implements ListingOperations {
                 );
     }
 
+    @Override
+    @Transactional
+    public void delete(Actor actor, UUID id) {
+        users.requireRole(actor.id(), actor.role());
+        var listing = lock(id);
+        if (actor.role() != Actor.Role.ADMIN
+                && (actor.role() != Actor.Role.DONOR || !actor.id().equals(listing.donorId()))) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+        // Authorization precedes the no-op, including for already deleted rows.
+        if ("DELETED".equals(listing.status())) return;
+        activity.record(actor.id(), id, "LISTING_ARCHIVED", repository.archiveDetails(id));
+        repository.markDeleted(id);
+    }
+
     public ListingView get(UUID id) {
 
         return repository
@@ -173,6 +188,8 @@ public class DefaultListingOperations implements ListingOperations {
 
     private void requireOpen(
             ListingView listing) {
+
+        if (listing.status().equals("DELETED")) throw new RuleViolation("LISTING_NOT_FOUND");
 
         if (repository.deadlinePassed(listing.id())
                 || listing.status().equals("EXPIRED")) {
@@ -237,5 +254,21 @@ public class DefaultListingOperations implements ListingOperations {
     public void markReserved(UUID id) {
 
         repository.reserve(id);
+    }
+
+    public ListingView getPublic(UUID id) {
+        var listing=get(id);
+        if (listing.status().equals("DELETED")) throw new RuleViolation("LISTING_NOT_FOUND");
+        return listing;
+    }
+
+    public ListingView getHistorical(Actor actor,UUID id) {
+        var listing=get(id);
+        if (!listing.status().equals("DELETED")) return listing;
+        users.requireRole(actor.id(),actor.role());
+        if (actor.role()==Actor.Role.ADMIN
+                || (actor.role()==Actor.Role.DONOR && actor.id().equals(listing.donorId()))
+                || (actor.role()==Actor.Role.RECIPIENT && repository.hasRequest(id,actor.id()))) return listing;
+        throw new RuleViolation("FORBIDDEN");
     }
 }

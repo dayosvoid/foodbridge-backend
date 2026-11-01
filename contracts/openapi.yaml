@@ -163,8 +163,34 @@ paths:
 
   /api/listings/{listingId}:
 
+    delete:
+      summary: Soft-delete a listing and audit its previous state
+      description: Owner or admin only. Repeated authorized deletion is a no-op. Preserves requests, handovers and activity history.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted or already deleted
+        '401':
+          description: Authentication required
+        '403':
+          description: Listing owner or admin required
+        '404':
+          description: Listing not found
+
     get:
       summary: Get a food listing
+      description: Deleted listings return 404 to anonymous callers. Authenticated historical access requires the owning donor, an admin, or a recipient with a request for the listing.
+      security:
+        - {}
+        - basicAuth: []
 
       parameters:
 
@@ -183,6 +209,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
+
+        '403':
+          description: Historical listing access is not permitted
 
         '404':
           description: Listing not found
@@ -604,6 +633,7 @@ components:
             - COLLECTED
             - REVERSED
             - EXPIRED
+            - DELETED
 
         donorId:
           type: string

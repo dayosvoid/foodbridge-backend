@@ -42,6 +42,15 @@ public interface ListingOperations {
 
     ListingView get(UUID id);
 
+    /** Idempotent soft deletion; preserves requests, handovers and history. */
+    void delete(Actor actor, UUID id);
+
+    /** Public detail access excludes deleted rows; internal get preserves history workflows. */
+    ListingView getPublic(UUID id);
+
+    /** Deleted history is available only to admin, owner, or a recipient who requested it. */
+    ListingView getHistorical(Actor actor, UUID id);
+
     List<ListingView> browse(int offset, int limit);
 
     List<ListingView> browseMine(
