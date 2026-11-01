@@ -6,5 +6,15 @@ public interface HandoverOperations {
 
     void createForApprovedRequest(UUID requestId);
 
-    void completeByRecipient(UUID requestId, UUID recipientId);
+    void completeByDonorOrAdmin(
+            UUID requestId,
+            UUID actorId,
+            boolean admin
+    );
+
+    void reverseByDonorOrAdmin(
+            UUID handoverId,
+            UUID actorId,
+            boolean admin
+    );
 }

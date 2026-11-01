@@ -10,7 +10,11 @@ class DatabaseActivityRecorder implements ActivityRecorder {
     DatabaseActivityRecorder(JdbcTemplate jdbc) { this.jdbc=jdbc; }
     @Transactional(propagation=Propagation.MANDATORY)
     public void record(UUID actor, UUID listing, String type) {
+        record(actor, listing, type, "{}");
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void record(UUID actor, UUID listing, String type, String details) {
         jdbc.update("insert into activity(id,actor_id,listing_id,type,details) values (?,?,?,?,?)",
-            UUID.randomUUID(),actor,listing,type,"{}");
+            UUID.randomUUID(),actor,listing,type,details);
     }
 }

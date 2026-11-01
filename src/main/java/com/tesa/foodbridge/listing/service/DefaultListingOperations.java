@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.listing.service;
 
 import com.tesa.foodbridge.listing.api.ListingOperations;
@@ -8,6 +9,7 @@ import com.tesa.foodbridge.activity.api.ActivityRecorder;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Instant;
 import java.util.List;
@@ -49,8 +51,7 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     @Transactional
-    public ListingView update(
-            Actor actor, UUID id, CreateListing c) {
+    public ListingView update(Actor actor, UUID id, CreateListing c) {
 
         if (actor.role() != Actor.Role.DONOR)
             throw new RuleViolation("FORBIDDEN");
@@ -58,7 +59,7 @@ public class DefaultListingOperations implements ListingOperations {
         users.requireRole(actor.id(), actor.role());
         validate(c);
 
-        ListingView existing = get(id);
+        ListingView existing = lock(id);
 
         if (!existing.donorId().equals(actor.id()))
             throw new RuleViolation("FORBIDDEN");
@@ -66,30 +67,7 @@ public class DefaultListingOperations implements ListingOperations {
         if (!existing.status().equals("AVAILABLE"))
             throw new RuleViolation("LISTING_NOT_EDITABLE");
 
-        if (!repository.update(id, c))
-            throw new RuleViolation("LISTING_NOT_EDITABLE");
-
-        return get(id);
-    }
-
-    @Transactional
-    public void delete(Actor actor, UUID id) {
-
-        if (actor.role() != Actor.Role.DONOR)
-            throw new RuleViolation("FORBIDDEN");
-
-        users.requireRole(actor.id(), actor.role());
-
-        ListingView existing = get(id);
-
-        if (!existing.donorId().equals(actor.id()))
-            throw new RuleViolation("FORBIDDEN");
-
-        if (!existing.status().equals("AVAILABLE"))
-            throw new RuleViolation("LISTING_NOT_DELETABLE");
-
-        if (!repository.softDelete(id))
-            throw new RuleViolation("LISTING_NOT_DELETABLE");
+        return repository.update(id, c);
     }
 
     private void validate(CreateListing c) {
@@ -120,7 +98,6 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     public List<ListingView> browse(int offset, int limit) {
-
         validatePage(offset, limit);
         return repository.browse(offset, limit);
     }
@@ -149,6 +126,22 @@ public class DefaultListingOperations implements ListingOperations {
                 .orElseThrow(() -> new RuleViolation("LISTING_NOT_FOUND"));
     }
 
+    @Override
+    @Transactional
+    public void delete(Actor actor, UUID id) {
+        users.requireRole(actor.id(), actor.role());
+        var listing = lock(id);
+        if (actor.role() != Actor.Role.ADMIN
+                && (actor.role() != Actor.Role.DONOR || !actor.id().equals(listing.donorId()))) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+        // Authorization precedes the no-op, including for already deleted rows.
+        if ("DELETED".equals(listing.status())) return;
+        if (!"AVAILABLE".equals(listing.status())) throw new RuleViolation("LISTING_NOT_DELETABLE");
+        activity.record(actor.id(), id, "LISTING_ARCHIVED", repository.archiveDetails(id));
+        if (repository.markDeleted(id) != 1) throw new RuleViolation("LISTING_NOT_DELETABLE");
+    }
+
     public ListingView get(UUID id) {
         return repository.find(id).stream()
                 .findFirst()
@@ -156,6 +149,8 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     private void requireOpen(ListingView listing) {
+
+        if (listing.status().equals("DELETED")) throw new RuleViolation("LISTING_NOT_FOUND");
 
         if (repository.deadlinePassed(listing.id())
                 || listing.status().equals("EXPIRED"))
@@ -191,5 +186,28 @@ public class DefaultListingOperations implements ListingOperations {
     @Transactional(propagation = Propagation.MANDATORY)
     public void markReserved(UUID id) {
         repository.reserve(id);
+    }
+
+    public ListingView getPublic(UUID id) {
+        var listing=get(id);
+        if (listing.status().equals("DELETED")) throw new RuleViolation("LISTING_NOT_FOUND");
+        return listing;
+    }
+
+    public ListingView getHistorical(Actor actor,UUID id) {
+        var listing=get(id);
+        if (!listing.status().equals("DELETED")) return listing;
+        users.requireRole(actor.id(),actor.role());
+        if (actor.role()==Actor.Role.ADMIN
+                || (actor.role()==Actor.Role.DONOR && actor.id().equals(listing.donorId()))
+                || (actor.role()==Actor.Role.RECIPIENT && repository.hasRequest(id,actor.id()))) return listing;
+        throw new RuleViolation("FORBIDDEN");
+    }
+
+    // Automatically expire overdue listings every minute
+    @Scheduled(fixedRate = 60000)
+    @Transactional
+    public void expireListings() {
+        repository.expireDueListings();
     }
 }

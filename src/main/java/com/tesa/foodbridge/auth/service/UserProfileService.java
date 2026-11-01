@@ -19,6 +19,15 @@ public class UserProfileService {
                     "donor1@demo.foodbridge.invalid"
             ),
 
+            "donor2",
+            new MeResponse(
+                    com.tesa.foodbridge.demo.DemoSeed.id("donor2").toString(),
+                    "Surulere Neighbourhood Kitchen (Demo)",
+                    "DONOR",
+                    "Surulere Neighbourhood Kitchen (Demo)",
+                    "donor2@demo.foodbridge.invalid"
+            ),
+
             "recipient1",
             new MeResponse(
                     com.tesa.foodbridge.demo.DemoSeed.id("recipient1").toString(),

@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.listing.repository;
 
 import com.tesa.foodbridge.listing.api.ListingOperations.*;
@@ -36,11 +37,11 @@ public class ListingRepository {
     private static final String SELECT = """
         select l.*, u.display_name as donor_name,
                (select count(*) from requests r
-                where r.listing_id=l.id
-                and r.status='PENDING')
+                where r.listing_id = l.id
+                and r.status = 'PENDING')
                 as pending_request_count
         from listings l
-        join users u on u.id=l.donor_id
+        join users u on u.id = l.donor_id
         """;
 
     public ListingRepository(JdbcTemplate jdbc) {
@@ -57,72 +58,49 @@ public class ListingRepository {
             )
             values (?,?,?,?,?,?,?,?,?,?)
             """,
-                id, donor, c.title(), c.description(),
-                c.category(), c.quantity(), c.unit(),
-                c.imageUrl(), c.pickupArea(),
+                id,
+                donor,
+                c.title(),
+                c.description(),
+                c.category(),
+                c.quantity(),
+                c.unit(),
+                c.imageUrl(),
+                c.pickupArea(),
                 Timestamp.from(c.collectionDeadline())
         );
 
-        return find(id).getFirst();
-    }
-
-    public boolean update(UUID id, CreateListing c) {
-
-        return jdbc.update("""
-            update listings
-            set title=?,
-                description=?,
-                category=?,
-                quantity=?,
-                unit=?,
-                image_url=?,
-                pickup_area=?,
-                collection_deadline=?,
-                updated_at=clock_timestamp()
-            where id=?
-              and status='AVAILABLE'
-            """,
-                c.title(), c.description(), c.category(),
-                c.quantity(), c.unit(), c.imageUrl(),
-                c.pickupArea(),
-                Timestamp.from(c.collectionDeadline()),
+        return jdbc.queryForObject(
+                SELECT + " where l.id=?",
+                MAPPER,
                 id
-        ) == 1;
-    }
-
-    public boolean softDelete(UUID id) {
-
-        return jdbc.update("""
-            update listings
-            set status='DELETED',
-                updated_at=clock_timestamp()
-            where id=?
-              and status='AVAILABLE'
-            """, id) == 1;
+        );
     }
 
     public List<ListingView> findLocked(UUID id) {
         return jdbc.query(
                 SELECT + " where l.id=? for update of l",
-                MAPPER, id
+                MAPPER,
+                id
         );
     }
 
     public List<ListingView> find(UUID id) {
         return jdbc.query(
                 SELECT + " where l.id=?",
-                MAPPER, id
+                MAPPER,
+                id
         );
     }
 
     public List<ListingView> browse(int offset, int limit) {
         return jdbc.query(
-                SELECT + """
-                     where l.status <> 'DELETED'
-                     order by l.created_at desc,l.id
-                     limit ? offset ?
-                     """,
-                MAPPER, limit, offset
+                SELECT
+                        + " where l.status<>'DELETED' order by l.created_at desc,l.id "
+                        + "limit ? offset ?",
+                MAPPER,
+                limit,
+                offset
         );
     }
 
@@ -130,13 +108,14 @@ public class ListingRepository {
             UUID donorId, int offset, int limit) {
 
         return jdbc.query(
-                SELECT + """
-                     where l.donor_id=?
-                       and l.status <> 'DELETED'
-                     order by l.created_at desc,l.id
-                     limit ? offset ?
-                     """,
-                MAPPER, donorId, limit, offset
+                SELECT
+                        + " where l.donor_id=? and l.status<>'DELETED' "
+                        + "order by l.created_at desc,l.id "
+                        + "limit ? offset ?",
+                MAPPER,
+                donorId,
+                limit,
+                offset
         );
     }
 
@@ -144,18 +123,89 @@ public class ListingRepository {
         return Boolean.TRUE.equals(
                 jdbc.queryForObject("""
                     select collection_deadline <= clock_timestamp()
-                    from listings where id=?
+                    from listings
+                    where id=?
                     """,
-                        Boolean.class, id)
+                        Boolean.class,
+                        id
+                )
         );
     }
 
     public void reserve(UUID id) {
         jdbc.update("""
             update listings
-            set status='RESERVED',
-                updated_at=clock_timestamp()
-            where id=?
+            set status = 'RESERVED',
+                updated_at = clock_timestamp()
+            where id = ?
+            """,
+                id
+        );
+    }
+
+    /** Called while holding the listing row lock in the deletion transaction. */
+    public String archiveDetails(UUID id) {
+        return jdbc.queryForObject("""
+            select jsonb_build_object('previous_status', l.status,
+                'listing', to_jsonb(l))::text from listings l where l.id=?
+            """, String.class, id);
+    }
+
+    public int markDeleted(UUID id) {
+        return jdbc.update("""
+            update listings set status='DELETED', updated_at=clock_timestamp()
+            where id=? and status='AVAILABLE'
             """, id);
+    }
+
+    public boolean hasRequest(UUID listingId,UUID requesterId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "select exists(select 1 from requests where listing_id=? and requester_id=?)",
+                Boolean.class,listingId,requesterId));
+    }
+
+    // Edit listing
+    public ListingView update(UUID id, CreateListing c) {
+
+        jdbc.update("""
+            update listings
+            set title = ?,
+                description = ?,
+                category = ?,
+                quantity = ?,
+                unit = ?,
+                image_url = ?,
+                pickup_area = ?,
+                collection_deadline = ?,
+                updated_at = clock_timestamp()
+            where id = ?
+              and status = 'AVAILABLE'
+            """,
+                c.title(),
+                c.description(),
+                c.category(),
+                c.quantity(),
+                c.unit(),
+                c.imageUrl(),
+                c.pickupArea(),
+                Timestamp.from(c.collectionDeadline()),
+                id
+        );
+
+        return find(id).stream()
+                .findFirst()
+                .orElseThrow(() ->
+                        new RuntimeException("Listing not found"));
+    }
+
+    // Automatically expire overdue listings
+    public int expireDueListings() {
+        return jdbc.update("""
+            update listings
+            set status = 'EXPIRED',
+                updated_at = clock_timestamp()
+            where status = 'AVAILABLE'
+              and collection_deadline <= clock_timestamp()
+            """);
     }
 }

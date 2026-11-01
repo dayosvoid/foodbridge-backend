@@ -38,5 +38,8 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Validate OpenAPI contract
+        run: npx --yes @redocly/cli lint contracts/openapi.yaml
+
       - name: Test
         run: mvn -B verify
