@@ -18,6 +18,7 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
+@org.springframework.test.context.ActiveProfiles("demo")
 @Testcontainers
 @org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 class PostgresRulesTest {
