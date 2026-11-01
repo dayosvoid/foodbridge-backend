@@ -1,3 +1,4 @@
+
 package com.tesa.foodbridge.auth.web;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -7,5 +8,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @OpenAPIDefinition
-@SecurityScheme(name = "basicAuth", type = SecuritySchemeType.HTTP, scheme = "basic")
-public class OpenApiConfig {}
+@SecurityScheme(
+        name = "bearerAuth",
+        type = SecuritySchemeType.HTTP,
+        scheme = "bearer",
+        bearerFormat = "opaque token"
+)
+public class OpenApiConfig {
+}

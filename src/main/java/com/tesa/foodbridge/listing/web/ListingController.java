@@ -12,11 +12,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +32,13 @@ public class ListingController {
             ListingOperations listings,
             ActorFactory actorFactory,
             CloudinaryService cloudinaryService) {
-
         this.listings = listings;
         this.actorFactory = actorFactory;
         this.cloudinaryService = cloudinaryService;
     }
 
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "basicAuth"
-    )
+            name = "bearerAuth")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ListingResponse create(
@@ -51,118 +47,95 @@ public class ListingController {
 
         Actor actor = actorFactory.from(authentication);
 
-        return toResponse(
-                listings.create(
-                        actor,
-                        new ListingOperations.CreateListing(
-                                request.title(),
-                                request.description(),
-                                request.category(),
-                                BigDecimal.valueOf(request.quantity()),
-                                request.unit(),
-                                request.imageReference(),
-                                request.pickupArea(),
-                                request.collectionDeadline()
-                        )
+        return toResponse(listings.create(
+                actor,
+                new ListingOperations.CreateListing(
+                        request.foodName(),
+                        request.description(),
+                        request.category(),
+                        request.quantity(),
+                        request.unit(),
+                        request.imageReference(),
+                        request.pickupArea(),
+                        request.collectionDeadline()
                 )
-        );
+        ));
     }
 
-    @PostMapping(
-            value = "/images",
-            consumes = "multipart/form-data"
-    )
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth")
+    @PutMapping("/{listingId}")
+    public ListingResponse update(
+            @PathVariable UUID listingId,
+            @Valid @RequestBody CreateListingRequest request,
+            Authentication authentication) {
+
+        Actor actor = actorFactory.from(authentication);
+
+        return toResponse(listings.update(
+                actor,
+                listingId,
+                new ListingOperations.CreateListing(
+                        request.foodName(),
+                        request.description(),
+                        request.category(),
+                        request.quantity(),
+                        request.unit(),
+                        request.imageReference(),
+                        request.pickupArea(),
+                        request.collectionDeadline()
+                )
+        ));
+    }
+
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth")
+    @DeleteMapping("/{listingId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(
+            @PathVariable UUID listingId,
+            Authentication authentication) {
+
+        listings.delete(actorFactory.from(authentication), listingId);
+    }
+
+    @PostMapping(value = "/images", consumes = "multipart/form-data")
     public Map<String, String> uploadImage(
             @RequestParam("file") MultipartFile file) throws IOException {
 
-        if (file.isEmpty()) {
+        if (file.isEmpty())
             throw new IllegalArgumentException("Image file cannot be empty");
-        }
 
-        String imageUrl = cloudinaryService.uploadImage(file);
-
-        return Map.of("imageUrl", imageUrl);
+        return Map.of("imageUrl", cloudinaryService.uploadImage(file));
     }
 
     @GetMapping
     public List<ListingResponse> browse(
-            @RequestParam(required = false)
-            String category,
-
-            @RequestParam(required = false)
-            String pickupArea,
-
-            @RequestParam(required = false)
-            String availability,
-
-            @RequestParam(required = false)
-            String keyword,
-
-            @RequestParam(defaultValue = "false")
-            boolean mine,
-
-            @RequestParam(defaultValue = "0")
-            int offset,
-
-            @RequestParam(defaultValue = "50")
-            int limit,
-
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String pickupArea,
+            @RequestParam(required = false) String availability,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "false") boolean mine,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "50") int limit,
             Authentication authentication) {
 
-        List<ListingOperations.ListingView> result;
-
-        if (mine) {
-            result = listings.browseMine(
-                    actorFactory.from(authentication),
-                    offset,
-                    limit
-            );
-        } else {
-            result = listings.browse(
-                    offset,
-                    limit
-            );
-        }
+        List<ListingOperations.ListingView> result = mine
+                ? listings.browseMine(actorFactory.from(authentication), offset, limit)
+                : listings.browse(offset, limit);
 
         return result.stream()
-
-                .filter(l ->
-                        availability == null
-                                || l.status()
-                                .equalsIgnoreCase(availability)
-                )
-
-                .filter(l ->
-                        category == null
-                                || l.category()
-                                .equalsIgnoreCase(category)
-                )
-
-                .filter(l ->
-                        pickupArea == null
-                                || l.pickupArea()
-                                .equalsIgnoreCase(pickupArea)
-                )
-
-                .filter(l ->
-                        keyword == null
-                                || (l.title() != null
-                                && l.title()
-                                .toLowerCase()
-                                .contains(keyword.toLowerCase()))
-
-                                || (l.description() != null
-                                && l.description()
-                                .toLowerCase()
-                                .contains(keyword.toLowerCase()))
-                )
-
-                .filter(l ->
-                        !l.collectionDeadline()
-                                .isBefore(Instant.now())
-                                || "EXPIRED".equalsIgnoreCase(l.status())
-                )
-
+                .filter(l -> availability == null
+                        || l.status().equalsIgnoreCase(availability))
+                .filter(l -> category == null
+                        || l.category().equalsIgnoreCase(category))
+                .filter(l -> pickupArea == null
+                        || l.pickupArea().equalsIgnoreCase(pickupArea))
+                .filter(l -> keyword == null
+                        || l.title().toLowerCase().contains(keyword.toLowerCase())
+                        || l.description().toLowerCase().contains(keyword.toLowerCase()))
+                .filter(l -> !l.collectionDeadline().isBefore(Instant.now())
+                        || "EXPIRED".equalsIgnoreCase(l.status()))
                 .map(this::toResponse)
                 .toList();
     }
@@ -179,15 +152,7 @@ public class ListingController {
         );
     }
 
-    @DeleteMapping("/{listingId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID listingId, Authentication authentication) {
-        listings.delete(actorFactory.from(authentication), listingId);
-    }
-
-    private ListingResponse toResponse(
-            ListingOperations.ListingView l) {
-
+    private ListingResponse toResponse(ListingOperations.ListingView l) {
         return new ListingResponse(
                 l.id().toString(),
                 l.title(),

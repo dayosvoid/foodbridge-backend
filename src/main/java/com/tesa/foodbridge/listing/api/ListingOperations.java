@@ -40,6 +40,8 @@ public interface ListingOperations {
 
     ListingView create(Actor actor, CreateListing command);
 
+    ListingView update(Actor actor, UUID id, CreateListing command);
+
     ListingView get(UUID id);
 
     /** Idempotent soft deletion; preserves requests, handovers and history. */
@@ -61,10 +63,7 @@ public interface ListingOperations {
 
     ListingView lockForRequest(UUID id);
 
-    ListingView lockForApproval(
-            UUID id,
-            Actor actor
-    );
+    ListingView lockForApproval(UUID id, Actor actor);
 
     void markReserved(UUID id);
 }

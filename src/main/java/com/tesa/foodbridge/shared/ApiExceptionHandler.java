@@ -1,9 +1,12 @@
+
 package com.tesa.foodbridge.shared;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
 
@@ -27,6 +30,17 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ErrorResponse invalidArgument(IllegalArgumentException e) {
+
+        return new ErrorResponse(
+                "INVALID_REQUEST",
+                e.getMessage(),
+                Instant.now()
+        );
+    }
+
     @ExceptionHandler(RuleViolation.class)
     ResponseEntity<ErrorResponse> rule(RuleViolation e) {
 
@@ -42,7 +56,9 @@ public class ApiExceptionHandler {
                  "REQUEST_NOT_FOUND" ->
                     HttpStatus.NOT_FOUND;
 
-            case "LISTING_ALREADY_RESERVED",
+            case "LISTING_NOT_DELETABLE",
+                 "LISTING_NOT_EDITABLE",
+                 "LISTING_ALREADY_RESERVED",
                  "LISTING_EXPIRED",
                  "REQUEST_NOT_PENDING",
                  "IDEMPOTENCY_KEY_REUSED" ->

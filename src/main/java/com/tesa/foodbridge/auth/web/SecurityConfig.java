@@ -1,14 +1,18 @@
+
 package com.tesa.foodbridge.auth.web;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,7 +32,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            BearerTokenFilter bearerTokenFilter) throws Exception {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -41,6 +47,14 @@ public class SecurityConfig {
                         )
                 )
 
+                .exceptionHandling(exception ->
+                        exception.authenticationEntryPoint(
+                                new HttpStatusEntryPoint(
+                                        HttpStatus.UNAUTHORIZED
+                                )
+                        )
+                )
+
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
@@ -48,15 +62,29 @@ public class SecurityConfig {
                                 "/api/auth/login"
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/listings").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/listings/*").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/listings"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/listings/*"
+                        ).permitAll()
 
                         .requestMatchers("/api/**").authenticated()
 
                         .anyRequest().permitAll()
                 )
 
-                .httpBasic(Customizer.withDefaults());
+                .httpBasic(AbstractHttpConfigurer::disable)
+
+                .formLogin(AbstractHttpConfigurer::disable)
+
+                .addFilterBefore(
+                        bearerTokenFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
@@ -87,6 +115,10 @@ public class SecurityConfig {
 
         configuration.setAllowedHeaders(
                 List.of("*")
+        );
+
+        configuration.setExposedHeaders(
+                List.of("X-Request-Id")
         );
 
         configuration.setAllowCredentials(true);

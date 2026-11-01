@@ -32,6 +32,17 @@ class PostgresRulesTest {
     @Autowired ListingOperations listings;
     @Autowired ReservationOperations requests;
     @Autowired org.springframework.test.web.servlet.MockMvc http;
+    String bearer(String login) {
+        String name=login.equals("admin1")?"admin":login;
+        String password=switch(login) { case "donor1" -> "donor123"; case "recipient1" -> "recipient123"; default -> "admin123"; };
+        try {
+            var response=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/login")
+                    .contentType("application/json")
+                    .content("{\"email\":\""+name+"@demo.foodbridge.invalid\",\"password\":\""+password+"\"}"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andReturn();
+            return "Bearer "+new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.getResponse().getContentAsString()).get("token").asText();
+        } catch(Exception e) { throw new AssertionError("Test login failed",e); }
+    }
     Actor donor, recipient;
     @BeforeEach void setup() {
         jdbc.execute("truncate activity,handovers,requests,listings,users");
@@ -167,10 +178,11 @@ class PostgresRulesTest {
         UUID listing=listing(), request=request(listing);
         requests.approve(donor,request);
         String before=jdbc.queryForObject("select to_jsonb(h)::text from handovers h",String.class);
-        listings.delete(user(Actor.Role.ADMIN),listing);
+        code("LISTING_NOT_DELETABLE",()->listings.delete(user(Actor.Role.ADMIN),listing));
         assertEquals("APPROVED",requests.get(recipient,request).status());
         assertEquals(before,jdbc.queryForObject("select to_jsonb(h)::text from handovers h",String.class));
-        assertEquals("RESERVED",jdbc.queryForObject("select details::jsonb->>'previous_status' from activity where type='LISTING_ARCHIVED'",String.class));
+        assertEquals("RESERVED",listings.get(listing).status());
+        assertEquals(0,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
     }
     @Test void failedStatusUpdateRollsBackArchiveEvent() {
         UUID listing=listing();
@@ -208,13 +220,13 @@ class PostgresRulesTest {
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
-                .header("Authorization", "Basic "+Base64.getEncoder().encodeToString("recipient1:recipient123".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .header("Authorization", bearer("recipient1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
-                .header("Authorization", "Basic "+Base64.getEncoder().encodeToString("donor1:donor123".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .header("Authorization", bearer("donor1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
-                .header("Authorization", "Basic "+Base64.getEncoder().encodeToString("donor1:donor123".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .header("Authorization", bearer("donor1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
         assertEquals("DELETED", listings.get(listing).status());
         assertEquals(1, jdbc.queryForObject("select count(*) from activity where listing_id=? and type='LISTING_ARCHIVED'", Integer.class, listing));
@@ -223,7 +235,7 @@ class PostgresRulesTest {
         jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'admin@example.invalid','disabled','Admin','ADMIN')",adminId);
         UUID another=listing();
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+another)
-                .header("Authorization", "Basic "+Base64.getEncoder().encodeToString("admin1:admin123".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .header("Authorization", bearer("admin1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
     }
     @Test void deletedRowsAreExcludedBeforePublicAndOwnerPagination() {
@@ -275,13 +287,45 @@ class PostgresRulesTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound());
         for(String login:List.of("donor1:donor123","recipient1:recipient123","admin1:admin123"))
             http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(url)
-                    .header("Authorization","Basic "+Base64.getEncoder().encodeToString(login.getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                    .header("Authorization",bearer(login.split(":")[0])))
                     .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
-                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.state").value("DELETED"));
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("DELETED"));
         UUID unrelated=listing();listings.delete(donor,unrelated);
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings/"+unrelated)
-                .header("Authorization","Basic "+Base64.getEncoder().encodeToString("donor1:donor123".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .header("Authorization",bearer("donor1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+    }
+
+    @Test void deletionAndApprovalSerializeWithoutLosingHistory() throws Exception {
+        UUID listing=listing(), pending=request(listing);
+        var results=parallel(List.of("DELETE","APPROVE"),op->{
+            try { if(op.equals("DELETE")) listings.delete(donor,listing); else requests.approve(donor,pending); return op; }
+            catch(RuleViolation e) { return e.code(); }
+        });
+        if(results.contains("DELETE")) {
+            assertTrue(results.contains("LISTING_NOT_FOUND"));
+            assertEquals("DELETED",listings.get(listing).status());
+            assertEquals("PENDING",requests.get(recipient,pending).status());
+            assertEquals(0,count("select count(*) from handovers"));
+            assertEquals(1,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+        } else {
+            assertTrue(results.contains("APPROVE"));
+            assertTrue(results.contains("LISTING_NOT_DELETABLE"));
+            assertEquals("RESERVED",listings.get(listing).status());
+            assertEquals(1,count("select count(*) from handovers"));
+            assertEquals(0,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+        }
+    }
+    @Test void protectedStatesReturnHttpConflict() throws Exception {
+        UUID owner=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'owner@example.invalid','disabled','Owner','DONOR')",owner);
+        for(String status:List.of("RESERVED","COLLECTED","REVERSED","EXPIRED")) {
+            UUID id=listings.create(new Actor(owner,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
+            jdbc.update("update listings set status=? where id=?",status,id);
+            http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+id).header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
+            assertEquals(status,listings.get(id).status());
+        }
     }
     static <T,R> List<R> parallel(List<T> values,java.util.function.Function<T,R> operation) throws Exception {
         var ready=new CountDownLatch(values.size()); var start=new CountDownLatch(1);

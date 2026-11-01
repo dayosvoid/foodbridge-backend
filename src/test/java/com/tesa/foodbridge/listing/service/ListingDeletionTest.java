@@ -25,6 +25,7 @@ class ListingDeletionTest {
     }
     @Test void recordsBeforeChangingStatus() {
         listing("AVAILABLE");
+        when(repository.markDeleted(id)).thenReturn(1);
         when(repository.archiveDetails(id)).thenReturn("{\"previous_status\":\"AVAILABLE\"}");
         service.delete(owner,id);
         var order=inOrder(users,repository,activity);
@@ -45,6 +46,24 @@ class ListingDeletionTest {
     }
     @Test void missingListingDoesNotWrite() {
         assertEquals("LISTING_NOT_FOUND",assertThrows(RuleViolation.class,()->service.delete(owner,id)).code());
+        verifyNoInteractions(activity);
+    }
+
+    @Test void conditionalUpdateFailureIsNotSuccess() {
+        listing("AVAILABLE");
+        assertEquals("LISTING_NOT_DELETABLE",assertThrows(RuleViolation.class,()->service.delete(owner,id)).code());
+    }
+    @Test void allOtherStatesRejectAuthorizedDeletion() {
+        for(String status:List.of("RESERVED","COLLECTED","REVERSED","EXPIRED")) {
+            listing(status);
+            assertEquals("LISTING_NOT_DELETABLE",assertThrows(RuleViolation.class,()->service.delete(owner,id)).code());
+        }
+        verifyNoInteractions(activity);
+        verify(repository,never()).markDeleted(any());
+    }
+    @Test void unauthorizedRepeatedDeletionIsForbidden() {
+        listing("DELETED");
+        assertEquals("FORBIDDEN",assertThrows(RuleViolation.class,()->service.delete(new Actor(UUID.randomUUID(),Actor.Role.DONOR),id)).code());
         verifyNoInteractions(activity);
     }
 }
