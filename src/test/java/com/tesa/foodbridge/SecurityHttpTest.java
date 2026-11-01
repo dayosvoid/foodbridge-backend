@@ -288,4 +288,16 @@ class SecurityHttpTest {
             assertEquals(HttpStatus.UNAUTHORIZED,response.getStatusCode());
         }
     }
+
+    @Test void corsPreflightAllowsVercelOriginMethodsHeadersAndExposesTotalCount() throws Exception {
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/api/requests/00000000-0000-0000-0000-000000000001/collected")
+                .header("Origin", "https://food-bridge-ruby.vercel.app")
+                .header("Access-Control-Request-Method", "PATCH")
+                .header("Access-Control-Request-Headers", "Authorization, Content-Type, X-Request-Id, Idempotency-Key"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Access-Control-Allow-Origin", "https://food-bridge-ruby.vercel.app"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Access-Control-Allow-Credentials", "true"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Access-Control-Expose-Headers", org.hamcrest.Matchers.containsString("X-Total-Count")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("PATCH")));
+    }
 }

@@ -104,6 +104,14 @@ public class ListingRepository {
         );
     }
 
+    public ListingPage browse(ListingFilter filter, int offset, int limit) {
+        return queryFiltered(null, filter, false, offset, limit);
+    }
+
+    public ListingPage browseAdmin(ListingFilter filter, int offset, int limit) {
+        return queryFiltered(null, filter, true, offset, limit);
+    }
+
     public List<ListingView> browseMine(
             UUID donorId, int offset, int limit) {
 
@@ -117,6 +125,92 @@ public class ListingRepository {
                 limit,
                 offset
         );
+    }
+
+    public ListingPage browseMine(
+            UUID donorId, ListingFilter filter, int offset, int limit) {
+        return queryFiltered(donorId, filter, false, offset, limit);
+    }
+
+    private ListingPage queryFiltered(
+            UUID donorId,
+            ListingFilter filter,
+            boolean includeDeleted,
+            int offset,
+            int limit) {
+
+        ListingFilter f = filter == null ? ListingFilter.NONE : filter;
+        Timestamp now = Timestamp.from(java.time.Instant.now());
+        java.util.List<Object> params = new java.util.ArrayList<>();
+        StringBuilder where = new StringBuilder(
+                includeDeleted ? " where 1=1" : " where l.status<>'DELETED'"
+        );
+
+        if (donorId != null) {
+            where.append(" and l.donor_id=?");
+            params.add(donorId);
+        }
+
+        if (f.category() != null && !f.category().isBlank()) {
+            where.append(" and upper(l.category)=upper(?)");
+            params.add(f.category().trim());
+        }
+
+        if (f.pickupArea() != null && !f.pickupArea().isBlank()) {
+            where.append(" and upper(l.pickup_area)=upper(?)");
+            params.add(f.pickupArea().trim());
+        }
+
+        if (f.keyword() != null && !f.keyword().isBlank()) {
+            String pattern = "%" + f.keyword().trim().toLowerCase(java.util.Locale.ROOT) + "%";
+            where.append(" and (lower(l.title) like ? or lower(l.description) like ?)");
+            params.add(pattern);
+            params.add(pattern);
+        }
+
+        if (f.availability() != null && !f.availability().isBlank()) {
+            String avail = f.availability().trim().toUpperCase(java.util.Locale.ROOT);
+            switch (avail) {
+                case "AVAILABLE" -> {
+                    where.append(" and l.status='AVAILABLE' and l.collection_deadline > ?");
+                    params.add(now);
+                }
+                case "EXPIRED" -> {
+                    if (includeDeleted) {
+                        where.append(" and (l.status in ('EXPIRED', 'DELETED') or (l.status='AVAILABLE' and l.collection_deadline <= ?))");
+                    } else {
+                        where.append(" and (l.status='EXPIRED' or (l.status='AVAILABLE' and l.collection_deadline <= ?))");
+                    }
+                    params.add(now);
+                }
+                case "RESERVED", "COLLECTED", "REVERSED" -> {
+                    where.append(" and l.status=?");
+                    params.add(avail);
+                }
+                default -> {
+                    where.append(" and l.status=?");
+                    params.add(avail);
+                }
+            }
+        }
+
+        Long total = jdbc.queryForObject(
+                "select count(*) from listings l join users u on u.id = l.donor_id" + where,
+                Long.class,
+                params.toArray()
+        );
+
+        java.util.List<Object> pageParams = new java.util.ArrayList<>(params);
+        pageParams.add(limit);
+        pageParams.add(offset);
+
+        List<ListingView> items = jdbc.query(
+                SELECT + where + " order by l.created_at desc,l.id limit ? offset ?",
+                MAPPER,
+                pageParams.toArray()
+        );
+
+        return new ListingPage(items, total == null ? 0L : total);
     }
 
     public boolean deadlinePassed(UUID id) {
@@ -154,7 +248,7 @@ public class ListingRepository {
     public int markDeleted(UUID id) {
         return jdbc.update("""
             update listings set status='DELETED', updated_at=clock_timestamp()
-            where id=? and status='AVAILABLE'
+            where id=? and status in ('AVAILABLE', 'EXPIRED')
             """, id);
     }
 

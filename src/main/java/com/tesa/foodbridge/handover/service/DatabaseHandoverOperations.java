@@ -40,23 +40,47 @@ class DatabaseHandoverOperations implements HandoverOperations {
             UUID actorId,
             boolean admin) {
 
-        UUID listingId;
+        var row = jdbc.query("""
+            select l.id as listing_id,
+                   l.donor_id,
+                   l.status as listing_status,
+                   r.status as request_status,
+                   h.status as handover_status
+            from requests r
+            join listings l on l.id = r.listing_id
+            left join handovers h on h.request_id = r.id
+            where r.id = ?
+            for update of r, l
+            """,
+                (rs, n) -> new Object[]{
+                        rs.getObject("listing_id", UUID.class),
+                        rs.getObject("donor_id", UUID.class),
+                        rs.getString("listing_status"),
+                        rs.getString("request_status"),
+                        rs.getString("handover_status")
+                },
+                requestId
+        ).stream().findFirst().orElseThrow(
+                () -> new RuleViolation("REQUEST_NOT_FOUND")
+        );
 
-        try {
-            listingId = jdbc.queryForObject("""
-                select l.id
-                from handovers h
-                join requests r on r.id = h.request_id
-                join listings l on l.id = r.listing_id
-                where r.id = ?
-                  and r.status = 'APPROVED'
-                  and h.status = 'AWAITING_COLLECTION'
-                  and (? = true or l.donor_id = ?)
-                for update of h, r, l
-                """, UUID.class, requestId, admin, actorId);
+        UUID listingId = (UUID) row[0];
+        UUID donorId = (UUID) row[1];
+        String listingStatus = (String) row[2];
+        String requestStatus = (String) row[3];
+        String handoverStatus = (String) row[4];
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-            throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if (!admin && !actorId.equals(donorId)) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+
+        if (!"APPROVED".equals(requestStatus)
+                || !"AWAITING_COLLECTION".equals(handoverStatus)) {
+            throw new RuleViolation("HANDOVER_NOT_PENDING");
+        }
+
+        if (!"RESERVED".equals(listingStatus)) {
+            throw new RuleViolation("LISTING_NOT_RESERVED");
         }
 
         int updated = jdbc.update("""
@@ -93,23 +117,43 @@ class DatabaseHandoverOperations implements HandoverOperations {
             UUID actorId,
             boolean admin) {
 
-        UUID listingId;
+        var row = jdbc.query("""
+            select l.id as listing_id,
+                   l.donor_id,
+                   l.status as listing_status,
+                   h.status as handover_status
+            from handovers h
+            join requests r on r.id = h.request_id
+            join listings l on l.id = r.listing_id
+            where h.id = ?
+            for update of h, l
+            """,
+                (rs, n) -> new Object[]{
+                        rs.getObject("listing_id", UUID.class),
+                        rs.getObject("donor_id", UUID.class),
+                        rs.getString("listing_status"),
+                        rs.getString("handover_status")
+                },
+                handoverId
+        ).stream().findFirst().orElseThrow(
+                () -> new RuleViolation("HANDOVER_NOT_FOUND")
+        );
 
-        try {
-            listingId = jdbc.queryForObject("""
-                select l.id
-                from handovers h
-                join requests r on r.id = h.request_id
-                join listings l on l.id = r.listing_id
-                where h.id = ?
-                  and h.status = 'COLLECTED'
-                  and l.status = 'COLLECTED'
-                  and (? = true or l.donor_id = ?)
-                for update of h, l
-                """, UUID.class, handoverId, admin, actorId);
+        UUID listingId = (UUID) row[0];
+        UUID donorId = (UUID) row[1];
+        String listingStatus = (String) row[2];
+        String handoverStatus = (String) row[3];
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-            throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if (!admin && !actorId.equals(donorId)) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+
+        if (!"COLLECTED".equals(handoverStatus)) {
+            throw new RuleViolation("HANDOVER_NOT_COLLECTED");
+        }
+
+        if (!"COLLECTED".equals(listingStatus)) {
+            throw new RuleViolation("LISTING_NOT_COLLECTED");
         }
 
         int handoverUpdated = jdbc.update("""
