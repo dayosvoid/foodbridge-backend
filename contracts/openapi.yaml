@@ -69,8 +69,10 @@ paths:
       tags: [Listings]
       operationId: browseListings
       summary: Browse food listings
-      description: Public browsing is allowed. Set mine=true to retrieve the authenticated donor's own listings.
-      security: []
+      description: Public browsing is allowed and excludes soft-deleted rows. Set mine=true to retrieve the authenticated donor's own non-deleted listings. When authenticated as an ADMIN with mine=false, soft-deleted records are included alongside active and expired listings. The default limit is 50 and the maximum is 100.
+      security:
+        - {}
+        - bearerAuth: []
       parameters:
         - name: category
           in: query
@@ -85,6 +87,7 @@ paths:
         - name: availability
           in: query
           required: false
+          description: Filter by availability state. AVAILABLE excludes listings whose collectionDeadline has passed; EXPIRED returns expired listings (and soft-deleted listings for administrators).
           schema:
             type: string
             enum: [AVAILABLE, RESERVED, COLLECTED, REVERSED, EXPIRED]
@@ -118,6 +121,13 @@ paths:
       responses:
         '200':
           description: Listings returned
+          headers:
+            X-Total-Count:
+              description: Total number of listings matching the applied filters before pagination.
+              schema:
+                type: integer
+                format: int64
+                minimum: 0
           content:
             application/json:
               schema:
@@ -269,7 +279,7 @@ paths:
       tags: [Listings]
       operationId: deleteListing
       summary: Soft-delete a listing and audit its previous state
-      description: Owning donor or admin only. Only AVAILABLE listings may transition to DELETED. Authorized repeated deletion returns 204 without another audit. Other states return 409. Deletion and archive auditing are atomic and preserve requests, handovers and activity history.
+      description: Owning donor or admin only. Only AVAILABLE or EXPIRED listings may transition to DELETED. Authorized repeated deletion returns 204 without another audit. Other states return 409. Deletion and archive auditing are atomic and preserve requests, handovers and activity history.
       security:
         - bearerAuth: []
       responses:
@@ -282,7 +292,7 @@ paths:
         '404':
           description: Listing not found
         '409':
-          description: Listing is RESERVED, COLLECTED, REVERSED or EXPIRED
+          description: Listing is RESERVED, COLLECTED or REVERSED
 
 
   /api/listings/{listingId}/requests:
@@ -576,6 +586,63 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/admin/requests:
+    get:
+      tags: [Administration]
+      operationId: getAdminRequests
+      summary: Get all food requests across the platform (Administrator only)
+      description: Administrator-only endpoint to retrieve platform-wide requests with optional status filtering and pagination.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, DECLINED, CANCELLED, EXPIRED]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Requests returned
+          headers:
+            X-Total-Count:
+              description: Total number of requests matching the applied filter before pagination.
+              schema:
+                type: integer
+                format: int64
+                minimum: 0
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FoodRequest'
+        '400':
+          description: Invalid status or pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/activity:
     get:
       tags: [Activity]
@@ -613,26 +680,26 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-          /api/admin/distribution/today:
-            get:
-              tags:
-                - Administration
-              operationId: getTodayDistribution
-              summary: Get today's fair-distribution status
-              description: Returns daily distribution statistics using Africa/Lagos calendar days.
-              security:
-                - bearerAuth: [ ]
-              responses:
-                '200':
-                  description: Daily distribution status
-                  content:
-                    application/json:
-                      schema:
-                        $ref: '#/components/schemas/DailyDistributionSummary'
-                '401':
-                  description: Authentication required
-                '403':
-                  description: Admin role required
+  /api/admin/distribution/today:
+    get:
+      tags:
+        - Administration
+      operationId: getTodayDistribution
+      summary: Get today's fair-distribution status
+      description: Returns daily distribution statistics using Africa/Lagos calendar days.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Daily distribution status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyDistributionSummary'
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin role required
 
 
 components:
@@ -741,7 +808,7 @@ components:
 
     ListingResponse:
       type: object
-      required: [id, foodName, description, category, quantity, unit, imageReference, pickupArea, collectionDeadline, status, donorId, donorName, createdAt, pendingRequestCount]
+      required: [id, foodName, description, category, quantity, unit, imageReference, pickupArea, collectionDeadline, status, donorId, donorName, createdAt, pendingRequestCount, deleted]
       properties:
         id:
           type: string
@@ -785,6 +852,14 @@ components:
         pendingRequestCount:
           type: integer
           minimum: 0
+        deleted:
+          type: boolean
+          description: True when the listing has been soft-deleted.
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the listing was soft-deleted, or null when not deleted.
 
     FoodRequest:
       type: object
@@ -820,7 +895,7 @@ components:
 
     AdminDashboardResponse:
       type: object
-      required: [totalUsers, totalDonors, totalRecipients, totalListings, availableListings, reservedListings, collectedListings, totalRequests, pendingRequests, completedHandovers]
+      required: [totalUsers, totalDonors, totalRecipients, totalListings, availableListings, reservedListings, collectedListings, expiredListings, totalRequests, pendingRequests, completedHandovers, estimatedPortionsSaved]
       properties:
         totalUsers:
           type: integer
@@ -843,6 +918,9 @@ components:
         collectedListings:
           type: integer
           format: int64
+        expiredListings:
+          type: integer
+          format: int64
         totalRequests:
           type: integer
           format: int64
@@ -852,6 +930,10 @@ components:
         completedHandovers:
           type: integer
           format: int64
+        estimatedPortionsSaved:
+          type: integer
+          format: int64
+          description: Estimated portions saved derived from completed (COLLECTED) handovers, excluding reversed handovers and incompatible non-portion units.
 
     ActivityResponse:
       type: object

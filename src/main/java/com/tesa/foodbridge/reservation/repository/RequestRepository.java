@@ -175,4 +175,39 @@ public class RequestRepository {
                 requesterId
         );
     }
+
+    public com.tesa.foodbridge.reservation.api.ReservationOperations.RequestPage browseAll(
+            String status,
+            int offset,
+            int limit) {
+
+        List<Object> params = new ArrayList<>();
+        StringBuilder where = new StringBuilder();
+
+        if (status != null && !status.isBlank()) {
+            where.append(" where r.status=?");
+            params.add(status.trim().toUpperCase(Locale.ROOT));
+        }
+
+        Long total = jdbc.queryForObject(
+                "select count(*) from requests r join users u on u.id=r.requester_id" + where,
+                Long.class,
+                params.toArray()
+        );
+
+        List<Object> pageParams = new ArrayList<>(params);
+        pageParams.add(limit);
+        pageParams.add(offset);
+
+        List<RequestView> items = jdbc.query(
+                SELECT + where + " order by r.created_at desc,r.id limit ? offset ?",
+                MAPPER,
+                pageParams.toArray()
+        );
+
+        return new com.tesa.foodbridge.reservation.api.ReservationOperations.RequestPage(
+                items,
+                total == null ? 0L : total
+        );
+    }
 }

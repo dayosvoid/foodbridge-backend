@@ -48,11 +48,13 @@ public class ApiExceptionHandler {
             case "UNAUTHORIZED" ->
                     HttpStatus.UNAUTHORIZED;
 
-            case "FORBIDDEN" ->
+            case "FORBIDDEN",
+                 "HANDOVER_NOT_FOUND_OR_FORBIDDEN" ->
                     HttpStatus.FORBIDDEN;
 
             case "LISTING_NOT_FOUND",
-                 "REQUEST_NOT_FOUND" ->
+                 "REQUEST_NOT_FOUND",
+                 "HANDOVER_NOT_FOUND" ->
                     HttpStatus.NOT_FOUND;
 
             case "LISTING_NOT_DELETABLE",
@@ -60,6 +62,10 @@ public class ApiExceptionHandler {
                  "LISTING_ALREADY_RESERVED",
                  "LISTING_EXPIRED",
                  "REQUEST_NOT_PENDING",
+                 "HANDOVER_NOT_PENDING",
+                 "HANDOVER_NOT_COLLECTED",
+                 "LISTING_NOT_RESERVED",
+                 "LISTING_NOT_COLLECTED",
                  "IDEMPOTENCY_KEY_REUSED",
                  "DAILY_DISTRIBUTION_PRIORITY" ->
                     HttpStatus.CONFLICT;

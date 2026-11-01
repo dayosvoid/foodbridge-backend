@@ -271,6 +271,35 @@ public class DefaultReservationOperations
         return requests.findMine(actor.id());
     }
 
+    public RequestPage browseAll(
+            Actor actor,
+            String status,
+            int offset,
+            int limit) {
+
+        if (actor.role() != Actor.Role.ADMIN) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+
+        users.requireRole(
+                actor.id(),
+                actor.role()
+        );
+
+        if (offset < 0 || limit < 1 || limit > 100) {
+            throw new RuleViolation("INVALID_PAGE");
+        }
+
+        if (status != null && !status.isBlank()) {
+            String normalized = status.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!java.util.Set.of("PENDING", "APPROVED", "DECLINED", "CANCELLED", "EXPIRED").contains(normalized)) {
+                throw new RuleViolation("INVALID_REQUEST");
+            }
+        }
+
+        return requests.browseAll(status, offset, limit);
+    }
+
     public RequestView approve(
             Actor actor,
             UUID id) {

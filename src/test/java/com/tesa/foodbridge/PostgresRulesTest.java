@@ -53,8 +53,8 @@ class PostgresRulesTest {
     String bearer(String login) {
         String name = login.equals("admin1") ? "admin" : login;
         String password = switch (login) {
-            case "donor1" -> "donor123";
-            case "recipient1" -> "recipient123";
+            case "donor1", "donor2" -> "donor123";
+            case "recipient1", "recipient2", "recipient3" -> "recipient123";
             default -> "admin123";
         };
 
@@ -851,13 +851,276 @@ class PostgresRulesTest {
     @Test void protectedStatesReturnHttpConflict() throws Exception {
         UUID owner=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
         jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'owner@example.invalid','disabled','Owner','DONOR')",owner);
-        for(String status:List.of("RESERVED","COLLECTED","REVERSED","EXPIRED")) {
+        for(String status:List.of("RESERVED","COLLECTED","REVERSED")) {
             UUID id=listings.create(new Actor(owner,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
             jdbc.update("update listings set status=? where id=?",status,id);
             http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+id).header("Authorization",bearer("donor1")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
             assertEquals(status,listings.get(id).status());
         }
+        UUID expiredId=listings.create(new Actor(owner,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
+        jdbc.update("update listings set status='EXPIRED' where id=?",expiredId);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+expiredId).header("Authorization",bearer("donor1")))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
+        assertEquals("DELETED",listings.get(expiredId).status());
+    }
+
+    @Test void markAsCollectedAuthorizationAndStateTransitions() throws Exception {
+        UUID donor1Id=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        UUID donor2Id=com.tesa.foodbridge.demo.DemoSeed.id("donor2");
+        UUID recipient1Id=com.tesa.foodbridge.demo.DemoSeed.id("recipient1");
+        UUID adminId=com.tesa.foodbridge.demo.DemoSeed.id("admin");
+        for(var entry:List.of(Map.entry(donor1Id,"DONOR"),Map.entry(donor2Id,"DONOR"),Map.entry(recipient1Id,"RECIPIENT"),Map.entry(adminId,"ADMIN"))) {
+            jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,'disabled','Test',?)",entry.getKey(),entry.getKey()+"@example.invalid",entry.getValue());
+        }
+        Actor donor1Actor=new Actor(donor1Id,Actor.Role.DONOR);
+        Actor recipient1Actor=new Actor(recipient1Id,Actor.Role.RECIPIENT);
+
+        // 1. Owning donor marks approved request as collected -> 200 OK
+        UUID listing1=listings.create(donor1Actor,command(new BigDecimal("15"))).id();
+        UUID req1=requests.request(recipient1Actor,listing1,null).id();
+        requests.approve(donor1Actor,req1);
+
+        // Unrelated donor rejected with 403 FORBIDDEN
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req1+"/collected")
+                .header("Authorization",bearer("donor2")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN"));
+
+        // Recipient rejected with 403 FORBIDDEN
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req1+"/collected")
+                .header("Authorization",bearer("recipient1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN"));
+
+        // Owning donor succeeds with 200 OK
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req1+"/collected")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("COLLECTED"));
+        assertEquals("COLLECTED",listings.get(listing1).status());
+
+        // Repeat collection on already collected request returns 409 CONFLICT (not 403)
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req1+"/collected")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("HANDOVER_NOT_PENDING"));
+
+        // 2. ADMIN marks approved request as collected -> 200 OK (using `recipient` from @BeforeEach so daily fairness first-round is satisfied)
+        UUID listing2=listings.create(donor1Actor,command(new BigDecimal("10"))).id();
+        UUID req2=requests.request(recipient,listing2,null).id();
+        requests.approve(donor1Actor,req2);
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req2+"/collected")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("COLLECTED"));
+        assertEquals("COLLECTED",listings.get(listing2).status());
+    }
+
+    @Test void listingDatabaseFilteringPaginationCountAndAvailabilitySemantics() throws Exception {
+        UUID donor1Id=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        UUID adminId=com.tesa.foodbridge.demo.DemoSeed.id("admin");
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'d1@example.invalid','disabled','Donor 1','DONOR')",donor1Id);
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'admin@example.invalid','disabled','Admin','ADMIN')",adminId);
+        Actor donor1Actor=new Actor(donor1Id,Actor.Role.DONOR);
+
+        // Create 15 AVAILABLE BAKERY listings in Yaba
+        for(int i=1;i<=15;i++) {
+            listings.create(donor1Actor,new ListingOperations.CreateListing(
+                    "Bread Batch "+i,"Fresh bakery loaves","BAKERY",new BigDecimal("10"),"PORTIONS",null,"Yaba",Instant.now().plusSeconds(7200)
+            ));
+        }
+        // Create 2 AVAILABLE PRODUCE listings in Ikeja, then expire 1 by deadline and 1 by status
+        UUID overdueAvailable=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "Overdue Apples","Fresh produce","PRODUCE",new BigDecimal("5"),"KG",null,"Ikeja",Instant.now().plusSeconds(3600)
+        )).id();
+        jdbc.update("update listings set collection_deadline=clock_timestamp()-interval '1 hour' where id=?",overdueAvailable);
+
+        UUID explicitExpired=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "Expired Oranges","Citrus fruit","PRODUCE",new BigDecimal("8"),"KG",null,"Ikeja",Instant.now().plusSeconds(3600)
+        )).id();
+        jdbc.update("update listings set status='EXPIRED', collection_deadline=clock_timestamp()-interval '2 hours' where id=?",explicitExpired);
+
+        // Create 1 RESERVED and 1 COLLECTED listing
+        UUID reservedListing=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "Reserved Rice","Jollof tray","PREPARED_MEALS",new BigDecimal("25"),"PORTIONS",null,"Yaba",Instant.now().plusSeconds(7200)
+        )).id();
+        jdbc.update("update listings set status='RESERVED' where id=?",reservedListing);
+
+        UUID collectedListing=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "Collected Beans","Cooked beans","PREPARED_MEALS",new BigDecimal("30"),"PORTIONS",null,"Yaba",Instant.now().plusSeconds(7200)
+        )).id();
+        jdbc.update("update listings set status='COLLECTED' where id=?",collectedListing);
+
+        // Page 1: availability=AVAILABLE, limit=12, offset=0 -> returns 12 items, X-Total-Count=15 (overdueAvailable excluded!)
+        var page1=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("offset","0").param("limit","12").param("availability","AVAILABLE"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","15"))
+                .andReturn();
+        var page1Json=new com.fasterxml.jackson.databind.ObjectMapper().readTree(page1.getResponse().getContentAsString());
+        assertEquals(12,page1Json.size());
+
+        // Page 2: availability=AVAILABLE, limit=12, offset=12 -> returns 3 items, X-Total-Count=15
+        var page2=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("offset","12").param("limit","12").param("availability","AVAILABLE"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","15"))
+                .andReturn();
+        var page2Json=new com.fasterxml.jackson.databind.ObjectMapper().readTree(page2.getResponse().getContentAsString());
+        assertEquals(3,page2Json.size());
+
+        // Empty page beyond total count: offset=24, limit=12 -> 0 items, X-Total-Count=15
+        var emptyPage=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("offset","24").param("limit","12").param("availability","AVAILABLE"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","15"))
+                .andReturn();
+        assertEquals(0,new com.fasterxml.jackson.databind.ObjectMapper().readTree(emptyPage.getResponse().getContentAsString()).size());
+
+        // EXPIRED filter returns both explicit EXPIRED and overdue AVAILABLE (total 2)
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("availability","EXPIRED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","2"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(2));
+
+        // RESERVED and COLLECTED filters
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("availability","RESERVED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","1"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id").value(reservedListing.toString()));
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("availability","COLLECTED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","1"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id").value(collectedListing.toString()));
+
+        // Combined filters: category=PREPARED_MEALS & pickupArea=Yaba & keyword=Beans -> 1 match
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("category","PREPARED_MEALS").param("pickupArea","Yaba").param("keyword","Beans"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","1"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id").value(collectedListing.toString()));
+
+        // Soft-delete an expired listing: donor1 deletes explicitExpired -> excluded from public EXPIRED, visible to ADMIN with deleted=true & deletedAt
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+explicitExpired)
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
+
+        // Public EXPIRED now has 1 (only overdueAvailable)
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("availability","EXPIRED"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","1"));
+
+        // Admin EXPIRED sees both (2), including soft-deleted record with deleted=true and deletedAt populated
+        var adminExpired=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings")
+                .param("availability","EXPIRED").param("limit","50")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","2"))
+                .andReturn();
+        var adminJson=new com.fasterxml.jackson.databind.ObjectMapper().readTree(adminExpired.getResponse().getContentAsString());
+        boolean foundDeleted=false;
+        for(var node:adminJson) {
+            if(node.get("id").asText().equals(explicitExpired.toString())) {
+                foundDeleted=true;
+                assertEquals("DELETED",node.get("status").asText());
+                assertTrue(node.get("deleted").asBoolean());
+                assertFalse(node.get("deletedAt").isNull());
+            }
+        }
+        assertTrue(foundDeleted);
+    }
+
+    @Test void adminDashboardAndAdminRequestsEndpoints() throws Exception {
+        UUID donor1Id=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        UUID recipient1Id=com.tesa.foodbridge.demo.DemoSeed.id("recipient1");
+        UUID recipient2Id=com.tesa.foodbridge.demo.DemoSeed.id("recipient2");
+        UUID adminId=com.tesa.foodbridge.demo.DemoSeed.id("admin");
+        for(var entry:List.of(Map.entry(donor1Id,"DONOR"),Map.entry(recipient1Id,"RECIPIENT"),Map.entry(recipient2Id,"RECIPIENT"),Map.entry(adminId,"ADMIN"))) {
+            jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,'disabled','Test',?)",entry.getKey(),entry.getKey()+"@example.invalid",entry.getValue());
+        }
+        Actor donor1Actor=new Actor(donor1Id,Actor.Role.DONOR);
+        Actor recipient1Actor=new Actor(recipient1Id,Actor.Role.RECIPIENT);
+        Actor recipient2Actor=new Actor(recipient2Id,Actor.Role.RECIPIENT);
+
+        // Create PORTIONS listing (20 portions) -> request -> approve -> collect
+        UUID portionsListing=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "20 Portions Rice","Lunch portions","PREPARED_MEALS",new BigDecimal("20"),"PORTIONS",null,"Lagos",Instant.now().plusSeconds(7200)
+        )).id();
+        UUID reqPortions=requests.request(recipient1Actor,portionsListing,null).id();
+        requests.approve(donor1Actor,reqPortions);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+reqPortions+"/collected")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
+        // Create KG listing (50 KG) -> request -> approve -> collect (must NOT be added to portions estimate!)
+        UUID kgListing=listings.create(donor1Actor,new ListingOperations.CreateListing(
+                "50 KG Flour","Bulk flour","PANTRY",new BigDecimal("50"),"KG",null,"Lagos",Instant.now().plusSeconds(7200)
+        )).id();
+        UUID reqKg=requests.request(recipient2Actor,kgListing,null).id();
+        requests.approve(donor1Actor,reqKg);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+reqKg+"/collected")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
+        // Create 1 expired listing and 1 available listing with a pending request
+        UUID expiredListing=listings.create(donor1Actor,command(BigDecimal.TEN)).id();
+        jdbc.update("update listings set status='EXPIRED' where id=?",expiredListing);
+        UUID openListing=listings.create(donor1Actor,command(BigDecimal.TEN)).id();
+        UUID pendingReq=requests.request(recipient1Actor,openListing,null).id();
+
+        // Verify dashboard figures
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/dashboard")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.availableListings").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.collectedListings").value(2))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.expiredListings").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.pendingRequests").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.completedHandovers").value(2))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.estimatedPortionsSaved").value(20));
+
+        // Reverse the portions handover -> estimatedPortionsSaved drops back to 0
+        UUID handoverId=jdbc.queryForObject("select id from handovers where request_id=?",UUID.class,reqPortions);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/handovers/"+handoverId+"/reverse")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/dashboard")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.collectedListings").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.completedHandovers").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.estimatedPortionsSaved").value(0));
+
+        // Verify GET /api/admin/requests authorization, status filtering, pagination and X-Total-Count
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/requests")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/requests")
+                .header("Authorization",bearer("recipient1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/requests")
+                .param("status","PENDING").param("offset","0").param("limit","10")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","1"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id").value(pendingReq.toString()));
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/requests")
+                .param("offset","0").param("limit","1")
+                .header("Authorization",bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Total-Count","3"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(1));
     }
 
     // --------------------------------------------------

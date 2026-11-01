@@ -8,7 +8,9 @@ public record AdminDashboardResponse(
         long availableListings,
         long reservedListings,
         long collectedListings,
+        long expiredListings,
         long totalRequests,
         long pendingRequests,
-        long completedHandovers
+        long completedHandovers,
+        long estimatedPortionsSaved
 ) {}
