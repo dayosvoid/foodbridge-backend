@@ -95,7 +95,9 @@ public class ListingRepository {
 
     public List<ListingView> browse(int offset, int limit) {
         return jdbc.query(
-                SELECT + " order by l.created_at desc,l.id limit ? offset ?",
+                SELECT
+                        + " where l.status<>'DELETED' order by l.created_at desc,l.id "
+                        + "limit ? offset ?",
                 MAPPER,
                 limit,
                 offset
@@ -106,7 +108,10 @@ public class ListingRepository {
             UUID donorId, int offset, int limit) {
 
         return jdbc.query(
-                SELECT + " where l.donor_id=? order by l.created_at desc,l.id limit ? offset ?",
+                SELECT
+                        + " where l.donor_id=? and l.status<>'DELETED' "
+                        + "order by l.created_at desc,l.id "
+                        + "limit ? offset ?",
                 MAPPER,
                 donorId,
                 limit,
@@ -136,6 +141,27 @@ public class ListingRepository {
             """,
                 id
         );
+    }
+
+    /** Called while holding the listing row lock in the deletion transaction. */
+    public String archiveDetails(UUID id) {
+        return jdbc.queryForObject("""
+            select jsonb_build_object('previous_status', l.status,
+                'listing', to_jsonb(l))::text from listings l where l.id=?
+            """, String.class, id);
+    }
+
+    public int markDeleted(UUID id) {
+        return jdbc.update("""
+            update listings set status='DELETED', updated_at=clock_timestamp()
+            where id=? and status='AVAILABLE'
+            """, id);
+    }
+
+    public boolean hasRequest(UUID listingId,UUID requesterId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "select exists(select 1 from requests where listing_id=? and requester_id=?)",
+                Boolean.class,listingId,requesterId));
     }
 
     // Edit listing
@@ -170,19 +196,6 @@ public class ListingRepository {
                 .findFirst()
                 .orElseThrow(() ->
                         new RuntimeException("Listing not found"));
-    }
-
-    // Soft delete listing
-    public void softDelete(UUID id) {
-        jdbc.update("""
-            update listings
-            set status = 'DELETED',
-                updated_at = clock_timestamp()
-            where id = ?
-              and status = 'AVAILABLE'
-            """,
-                id
-        );
     }
 
     // Automatically expire overdue listings

@@ -205,13 +205,19 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   /api/listings/{listingId}:
+
     parameters:
       - $ref: '#/components/parameters/ListingId'
     get:
       tags: [Listings]
       operationId: getListing
       summary: Get a food listing
-      security: []
+      description: Deleted listings return 404 to anonymous callers. Authenticated historical access requires the owning donor, an admin, or a recipient with a request for the listing.
+      security:
+        - {}
+        - bearerAuth: []
+
+
       responses:
         '200':
           description: Listing returned
@@ -219,6 +225,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
+
+        '403':
+          description: Historical listing access is not permitted
+
         '404':
           description: Listing not found
     put:
@@ -253,22 +263,27 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: Listing not found
+        '409':
+          description: Listing is not AVAILABLE and cannot be edited
     delete:
       tags: [Listings]
       operationId: deleteListing
-      summary: Delete a listing
-      description: The service performs a soft delete. Only the listing owner may delete their listing, subject to the service's business rules.
+      summary: Soft-delete a listing and audit its previous state
+      description: Owning donor or admin only. Only AVAILABLE listings may transition to DELETED. Authorized repeated deletion returns 204 without another audit. Other states return 409. Deletion and archive auditing are atomic and preserve requests, handovers and activity history.
       security:
         - bearerAuth: []
       responses:
         '204':
-          description: Listing deleted; no response body
+          description: Deleted or already deleted
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Authentication required
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Listing owner or admin required
         '404':
           description: Listing not found
+        '409':
+          description: Listing is RESERVED, COLLECTED, REVERSED or EXPIRED
+
 
   /api/listings/{listingId}/requests:
     parameters:
@@ -729,8 +744,14 @@ components:
           format: date-time
         status:
           type: string
-          description: Listing lifecycle state. DELETED is intentionally omitted until the team's pending database migration is merged.
-          enum: [AVAILABLE, RESERVED, COLLECTED, REVERSED, EXPIRED]
+          enum:
+            - AVAILABLE
+            - RESERVED
+            - COLLECTED
+            - REVERSED
+            - EXPIRED
+            - DELETED
+
         donorId:
           type: string
           format: uuid

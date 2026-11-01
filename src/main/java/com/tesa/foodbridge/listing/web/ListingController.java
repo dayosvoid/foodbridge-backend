@@ -141,8 +141,15 @@ public class ListingController {
     }
 
     @GetMapping("/{listingId}")
-    public ListingResponse get(@PathVariable UUID listingId) {
-        return toResponse(listings.get(listingId));
+    public ListingResponse get(
+            @PathVariable UUID listingId,Authentication authentication) {
+
+        return toResponse(
+                authentication==null || !authentication.isAuthenticated()
+                        || authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken
+                        ? listings.getPublic(listingId)
+                        : listings.getHistorical(actorFactory.from(authentication),listingId)
+        );
     }
 
     private ListingResponse toResponse(ListingOperations.ListingView l) {

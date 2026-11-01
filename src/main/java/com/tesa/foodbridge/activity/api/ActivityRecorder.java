@@ -1,3 +1,6 @@
 package com.tesa.foodbridge.activity.api;
 import java.util.UUID;
-public interface ActivityRecorder { void record(UUID actorId, UUID listingId, String type); }
+public interface ActivityRecorder {
+    void record(UUID actorId, UUID listingId, String type);
+    void record(UUID actorId, UUID listingId, String type, String details);
+}
