@@ -35,6 +35,14 @@ class ListingDeletionTest {
         order.verify(activity).record(owner.id(),id,"LISTING_ARCHIVED","{\"previous_status\":\"AVAILABLE\"}");
         order.verify(repository).markDeleted(id);
     }
+    @Test void expiredListingCanBeSoftDeletedByOwner() {
+        listing("EXPIRED");
+        when(repository.markDeleted(id)).thenReturn(1);
+        when(repository.archiveDetails(id)).thenReturn("{\"previous_status\":\"EXPIRED\"}");
+        service.delete(owner,id);
+        verify(activity).record(owner.id(),id,"LISTING_ARCHIVED","{\"previous_status\":\"EXPIRED\"}");
+        verify(repository).markDeleted(id);
+    }
     @Test void repeatedDeletionDoesNotWrite() {
         listing("DELETED"); service.delete(owner,id);
         verifyNoInteractions(activity); verify(repository,never()).markDeleted(any());
@@ -54,7 +62,7 @@ class ListingDeletionTest {
         assertEquals("LISTING_NOT_DELETABLE",assertThrows(RuleViolation.class,()->service.delete(owner,id)).code());
     }
     @Test void allOtherStatesRejectAuthorizedDeletion() {
-        for(String status:List.of("RESERVED","COLLECTED","REVERSED","EXPIRED")) {
+        for(String status:List.of("RESERVED","COLLECTED","REVERSED")) {
             listing(status);
             assertEquals("LISTING_NOT_DELETABLE",assertThrows(RuleViolation.class,()->service.delete(owner,id)).code());
         }

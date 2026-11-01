@@ -10,12 +10,12 @@ import com.tesa.foodbridge.shared.ActorFactory;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -110,7 +110,7 @@ public class ListingController {
     }
 
     @GetMapping
-    public List<ListingResponse> browse(
+    public ResponseEntity<List<ListingResponse>> browse(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String pickupArea,
             @RequestParam(required = false) String availability,
@@ -120,24 +120,33 @@ public class ListingController {
             @RequestParam(defaultValue = "50") int limit,
             Authentication authentication) {
 
-        List<ListingOperations.ListingView> result = mine
-                ? listings.browseMine(actorFactory.from(authentication), offset, limit)
-                : listings.browse(offset, limit);
+        var filter = new ListingOperations.ListingFilter(
+                category,
+                pickupArea,
+                availability,
+                keyword
+        );
 
-        return result.stream()
-                .filter(l -> availability == null
-                        || l.status().equalsIgnoreCase(availability))
-                .filter(l -> category == null
-                        || l.category().equalsIgnoreCase(category))
-                .filter(l -> pickupArea == null
-                        || l.pickupArea().equalsIgnoreCase(pickupArea))
-                .filter(l -> keyword == null
-                        || l.title().toLowerCase().contains(keyword.toLowerCase())
-                        || l.description().toLowerCase().contains(keyword.toLowerCase()))
-                .filter(l -> !l.collectionDeadline().isBefore(Instant.now())
-                        || "EXPIRED".equalsIgnoreCase(l.status()))
+        ListingOperations.ListingPage page;
+        if (mine) {
+            page = listings.browseMine(actorFactory.from(authentication), filter, offset, limit);
+        } else if (authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
+                && authentication.getAuthorities().stream()
+                        .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()))) {
+            page = listings.browseAdmin(actorFactory.from(authentication), filter, offset, limit);
+        } else {
+            page = listings.browse(filter, offset, limit);
+        }
+
+        List<ListingResponse> body = page.items().stream()
                 .map(this::toResponse)
                 .toList();
+
+        return ResponseEntity.ok()
+                .header("X-Total-Count", Long.toString(page.totalCount()))
+                .body(body);
     }
 
     @GetMapping("/{listingId}")
@@ -153,6 +162,7 @@ public class ListingController {
     }
 
     private ListingResponse toResponse(ListingOperations.ListingView l) {
+        boolean deleted = "DELETED".equals(l.status());
         return new ListingResponse(
                 l.id().toString(),
                 l.title(),
@@ -167,7 +177,9 @@ public class ListingController {
                 l.donorId().toString(),
                 l.donorName(),
                 l.createdAt(),
-                l.pendingRequestCount()
+                l.pendingRequestCount(),
+                deleted,
+                deleted ? l.updatedAt() : null
         );
     }
 }

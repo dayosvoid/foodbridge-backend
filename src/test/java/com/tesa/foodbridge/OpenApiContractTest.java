@@ -99,6 +99,7 @@ class OpenApiContractTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
+        assertNotNull(response.getHeaders().getFirst("X-Total-Count"));
 
         JsonNode listings =
                 objectMapper.readTree(response.getBody());
@@ -151,6 +152,9 @@ class OpenApiContractTest {
             assertTrue(
                     listing.get("pendingRequestCount").isIntegralNumber()
             );
+
+            assertTrue(listing.hasNonNull("deleted"));
+            assertTrue(listing.get("deleted").isBoolean());
 
             if (listing.has("imageReference")
                     && !listing.get("imageReference").isNull()) {

@@ -17,5 +17,7 @@ public record ListingResponse(
         String donorId,
         String donorName,
         Instant createdAt,
-        int pendingRequestCount
+        int pendingRequestCount,
+        boolean deleted,
+        Instant deletedAt
 ) {}
