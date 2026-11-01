@@ -37,6 +37,24 @@ public class UserProfileService {
                     "recipient1@demo.foodbridge.invalid"
             ),
 
+            "recipient2",
+            new MeResponse(
+                    com.tesa.foodbridge.demo.DemoSeed.id("recipient2").toString(),
+                    "SIMULATED recipient2",
+                    "RECIPIENT",
+                    "SIMULATED recipient2",
+                    "recipient2@demo.foodbridge.invalid"
+            ),
+
+            "recipient3",
+            new MeResponse(
+                    com.tesa.foodbridge.demo.DemoSeed.id("recipient3").toString(),
+                    "SIMULATED recipient3",
+                    "RECIPIENT",
+                    "SIMULATED recipient3",
+                    "recipient3@demo.foodbridge.invalid"
+            ),
+
             "admin1",
             new MeResponse(
                     com.tesa.foodbridge.demo.DemoSeed.id("admin").toString(),

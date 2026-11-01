@@ -16,9 +16,11 @@ public class ApiUserDetailsService {
         var encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
         var donor1 = User.withUsername("donor1").password(encoder.encode("donor123")).roles("DONOR").build();
         var donor2 = User.withUsername("donor2").password(encoder.encode("donor123")).roles("DONOR").build();
-        var recipient = User.withUsername("recipient1").password(encoder.encode("recipient123")).roles("RECIPIENT").build();
+        var recipient1 = User.withUsername("recipient1").password(encoder.encode("recipient123")).roles("RECIPIENT").build();
+        var recipient2 = User.withUsername("recipient2").password(encoder.encode("recipient123")).roles("RECIPIENT").build();
+        var recipient3 = User.withUsername("recipient3").password(encoder.encode("recipient123")).roles("RECIPIENT").build();
         var admin = User.withUsername("admin1").password(encoder.encode("admin123")).roles("ADMIN").build();
-        return new InMemoryUserDetailsManager(donor1, donor2, recipient, admin);
+        return new InMemoryUserDetailsManager(donor1, donor2, recipient1, recipient2, recipient3, admin);
     }
 
     @Bean

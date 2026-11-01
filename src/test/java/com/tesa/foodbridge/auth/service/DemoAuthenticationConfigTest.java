@@ -25,11 +25,24 @@ class DemoAuthenticationConfigTest {
             }
         });
     }
+    @Test void allSeededRecipientsUseEncodedPasswords() {
+        context("demo").run(c -> {
+            var users=c.getBean(UserDetailsService.class);
+            var encoder=PasswordEncoderFactories.createDelegatingPasswordEncoder();
+            for(String name:java.util.List.of("recipient1","recipient2","recipient3")) {
+                var user=users.loadUserByUsername(name);
+                assertTrue(user.getPassword().startsWith("{bcrypt}"));
+                assertTrue(encoder.matches("recipient123",user.getPassword()));
+                assertFalse(encoder.matches("wrong-password",user.getPassword()));
+                assertEquals("ROLE_RECIPIENT",user.getAuthorities().iterator().next().getAuthority());
+            }
+        });
+    }
     @Test void demoCredentialsAreUnavailableOutsideDemoAndInProduction() {
         for(String[] profiles:new String[][]{{},{"prod"},{"production"},{"demo","prod"},{"demo","production"}}) {
             context(profiles).run(c -> {
                 var users=c.getBean(UserDetailsService.class);
-                for(String name:java.util.List.of("donor1","donor2","recipient1","admin1"))
+                for(String name:java.util.List.of("donor1","donor2","recipient1","recipient2","recipient3","admin1"))
                     assertThrows(UsernameNotFoundException.class,()->users.loadUserByUsername(name));
             });
         }

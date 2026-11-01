@@ -237,4 +237,55 @@ class SecurityHttpTest {
             assertEquals(HttpStatus.UNAUTHORIZED,response.getStatusCode());
         }
     }
+
+    @Test void allSeededRecipientsAuthenticateAndRequestOnlyAsThemselves() throws Exception {
+        var identities=java.util.Map.of(
+                "recipient1@demo.foodbridge.invalid","c8840d79-f188-3367-a470-d3dc9609a640",
+                "recipient2@demo.foodbridge.invalid","668cefe8-0c95-34f2-9823-92ac376b8cf8",
+                "recipient3@demo.foodbridge.invalid","034f933b-74f1-3e77-b2ac-a069fe91c637");
+        var donor=new com.tesa.foodbridge.shared.Actor(java.util.UUID.randomUUID(),com.tesa.foodbridge.shared.Actor.Role.DONOR);
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,'existing-test-hash','Donor','DONOR')",donor.id(),donor.id()+"@example.invalid");
+        for(var identity:identities.entrySet())
+            jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,'preserved-existing-hash','Existing recipient','RECIPIENT')",java.util.UUID.fromString(identity.getValue()),identity.getKey());
+        var usersBefore=jdbc.queryForList("select * from users order by id");
+        var command=new com.tesa.foodbridge.listing.api.ListingOperations.CreateListing("Demo food","Recipient authentication test","OTHER",java.math.BigDecimal.TEN,"ITEMS",null,"Lagos",java.time.Instant.now().plusSeconds(3600));
+        var listing=listings.create(donor,command);
+        var tokens=new java.util.HashSet<String>();
+        for(var identity:identities.entrySet()) {
+            var login=restTemplate.postForEntity(url("/api/auth/login"),new HttpEntity<>(java.util.Map.of("email",identity.getKey(),"password","recipient123")),String.class);
+            assertEquals(HttpStatus.OK,login.getStatusCode());
+            var body=objectMapper.readTree(login.getBody());
+            assertEquals(identity.getValue(),body.get("id").asText());
+            assertEquals("RECIPIENT",body.get("role").asText());
+            String token=body.get("token").asText();
+            assertTrue(token.length()>=40);
+            assertTrue(tokens.add(token));
+            var profile=restTemplate.exchange(url("/api/auth/me"),HttpMethod.GET,new HttpEntity<>(bearerAuth(token)),String.class);
+            assertEquals(HttpStatus.OK,profile.getStatusCode());
+            var me=objectMapper.readTree(profile.getBody());
+            assertEquals(identity.getValue(),me.get("id").asText());
+            assertEquals(identity.getKey(),me.get("email").asText());
+            assertEquals("RECIPIENT",me.get("role").asText());
+            var result=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/listings/"+listing.id()+"/requests")
+                    .header("Authorization","Bearer "+token).header("Idempotency-Key",java.util.UUID.randomUUID().toString()))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isCreated()).andReturn();
+            var request=objectMapper.readTree(result.getResponse().getContentAsString());
+            assertEquals(identity.getValue(),request.get("recipientId").asText());
+            assertEquals(identity.getValue(),jdbc.queryForObject("select requester_id::text from requests where id=?",String.class,java.util.UUID.fromString(request.get("id").asText())));
+            http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+request.get("id").asText()+"/approve").header("Authorization","Bearer "+token))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+            http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+listing.id()).header("Authorization","Bearer "+token))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+            assertEquals("PENDING",jdbc.queryForObject("select status from requests where id=?",String.class,java.util.UUID.fromString(request.get("id").asText())));
+        }
+        assertEquals("AVAILABLE",listings.get(listing.id()).status());
+        assertEquals(usersBefore,jdbc.queryForList("select * from users order by id"));
+    }
+
+    @Test void allRecipientsRejectIncorrectPasswords() {
+        for(String email:java.util.List.of("recipient1@demo.foodbridge.invalid","recipient2@demo.foodbridge.invalid","recipient3@demo.foodbridge.invalid")) {
+            var response=restTemplate.postForEntity(url("/api/auth/login"),new HttpEntity<>(java.util.Map.of("email",email,"password","wrong-password")),String.class);
+            assertEquals(HttpStatus.UNAUTHORIZED,response.getStatusCode());
+        }
+    }
 }
