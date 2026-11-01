@@ -32,9 +32,11 @@ public class ActorFactory {
                 );
 
         String username = authentication.getName();
+        // Match UserProfileService: the in-memory admin1 login owns the seeded admin UUID.
+        String identityKey = username.equals("admin1") ? "admin" : username;
 
         UUID id = UUID.nameUUIDFromBytes(
-                ("foodbridge-simulated-" + username)
+                ("foodbridge-simulated-" + identityKey)
                         .getBytes(StandardCharsets.UTF_8)
         );
 

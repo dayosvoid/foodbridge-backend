@@ -24,7 +24,10 @@ public class AuthController {
     private static final Map<String, String> DEMO_EMAIL_TO_USERNAME =
             Map.of(
                     "donor1@demo.foodbridge.invalid", "donor1",
+                    "donor2@demo.foodbridge.invalid", "donor2",
                     "recipient1@demo.foodbridge.invalid", "recipient1",
+                    "recipient2@demo.foodbridge.invalid", "recipient2",
+                    "recipient3@demo.foodbridge.invalid", "recipient3",
                     "admin@demo.foodbridge.invalid", "admin1"
             );
 

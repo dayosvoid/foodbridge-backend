@@ -22,19 +22,20 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
+@org.springframework.test.context.ActiveProfiles("demo")
 @Testcontainers
+@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 class PostgresRulesTest {
-
     @Container
     static final PostgreSQLContainer<?> DB =
             new PostgreSQLContainer<>("postgres:17-alpine");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
-
         r.add("spring.datasource.url", DB::getJdbcUrl);
         r.add("spring.datasource.username", DB::getUsername);
         r.add("spring.datasource.password", DB::getPassword);
+        r.add("foodbridge.demo.seed-enabled", () -> "false");
     }
 
     @Autowired
@@ -46,19 +47,49 @@ class PostgresRulesTest {
     @Autowired
     ReservationOperations requests;
 
+    @Autowired
+    org.springframework.test.web.servlet.MockMvc http;
+
+    String bearer(String login) {
+        String name = login.equals("admin1") ? "admin" : login;
+        String password = switch (login) {
+            case "donor1" -> "donor123";
+            case "recipient1" -> "recipient123";
+            default -> "admin123";
+        };
+
+        try {
+            var response = http.perform(
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .post("/api/auth/login")
+                            .contentType("application/json")
+                            .content("{\"email\":\"" + name
+                                    + "@demo.foodbridge.invalid\",\"password\":\""
+                                    + password + "\"}")
+            ).andExpect(
+                    org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                            .status().isOk()
+            ).andReturn();
+
+            return "Bearer " + new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(response.getResponse().getContentAsString())
+                    .get("token").asText();
+
+        } catch (Exception e) {
+            throw new AssertionError("Test login failed", e);
+        }
+    }
+
     Actor donor;
     Actor recipient;
 
     @BeforeEach
     void setup() {
-
-        jdbc.execute(
-                "truncate activity,handovers,requests,listings,users"
-        );
-
+        jdbc.execute("truncate activity,handovers,requests,listings,users");
         donor = user(Actor.Role.DONOR);
         recipient = user(Actor.Role.RECIPIENT);
     }
+
 
     Actor user(Actor.Role role) {
 
@@ -586,6 +617,7 @@ class PostgresRulesTest {
         );
     }
 
+
     // --------------------------------------------------
     // DEMO SEED TEST
     // --------------------------------------------------
@@ -650,6 +682,182 @@ class PostgresRulesTest {
                 3,
                 count("select count(*) from handovers")
         );
+    }
+
+    @Test void deletionSnapshotsPreviousStateAndPreservesHistory() throws Exception {
+        UUID listing=listing(), pending=request(listing);
+        String before=jdbc.queryForObject("select to_jsonb(l)::text from listings l where id=?",String.class,listing);
+        String requestBefore=jdbc.queryForObject("select to_jsonb(r)::text from requests r where id=?",String.class,pending);
+        listings.delete(donor,listing);
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var details=json.readTree(jdbc.queryForObject("select details from activity where type='LISTING_ARCHIVED'",String.class));
+        assertEquals("AVAILABLE",details.path("previous_status").asText());
+        assertEquals(json.readTree(before),details.path("listing"));
+        assertEquals(requestBefore,jdbc.queryForObject("select to_jsonb(r)::text from requests r where id=?",String.class,pending));
+        assertEquals("DELETED",listings.get(listing).status());
+        assertTrue(listings.browse(0,100).isEmpty());
+        code("LISTING_NOT_FOUND",()->requests.request(recipient,listing,null));
+        code("LISTING_NOT_FOUND",()->requests.approve(donor,pending));
+        assertEquals(2,count("select count(*) from activity where type<>'LISTING_ARCHIVED'"));
+    }
+    @Test void concurrentAndRepeatedDeletionCreateOneEvent() throws Exception {
+        UUID listing=listing();
+        parallel(List.of(1,2,3),i->{listings.delete(donor,listing);return true;});
+        listings.delete(donor,listing);
+        assertEquals(1,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+    }
+    @Test void deletionPreservesApprovedRequestAndHandover() {
+        UUID listing=listing(), request=request(listing);
+        requests.approve(donor,request);
+        String before=jdbc.queryForObject("select to_jsonb(h)::text from handovers h",String.class);
+        code("LISTING_NOT_DELETABLE",()->listings.delete(user(Actor.Role.ADMIN),listing));
+        assertEquals("APPROVED",requests.get(recipient,request).status());
+        assertEquals(before,jdbc.queryForObject("select to_jsonb(h)::text from handovers h",String.class));
+        assertEquals("RESERVED",listings.get(listing).status());
+        assertEquals(0,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+    }
+    @Test void failedStatusUpdateRollsBackArchiveEvent() {
+        UUID listing=listing();
+        jdbc.execute("alter table listings add constraint test_no_delete check(status<>'DELETED')");
+        try {
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->listings.delete(donor,listing));
+            assertEquals("AVAILABLE",listings.get(listing).status());
+            assertEquals(0,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+        } finally { jdbc.execute("alter table listings drop constraint test_no_delete"); }
+    }
+    @Test void failedArchiveInsertLeavesListingUnchanged() {
+        UUID listing=listing();
+        jdbc.execute("alter table activity add constraint test_no_archive check(type<>'LISTING_ARCHIVED')");
+        try {
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->listings.delete(donor,listing));
+            assertEquals("AVAILABLE",listings.get(listing).status());
+        } finally { jdbc.execute("alter table activity drop constraint test_no_archive"); }
+    }
+    @Test void deletionAuthorizationIncludesNoOpAndDatabaseRoleValidation() {
+        UUID listing=listing();
+        Actor stranger=user(Actor.Role.DONOR);
+        code("FORBIDDEN",()->listings.delete(stranger,listing));
+        code("FORBIDDEN",()->listings.delete(recipient,listing));
+        code("FORBIDDEN",()->listings.delete(new Actor(recipient.id(),Actor.Role.ADMIN),listing));
+        listings.delete(donor,listing);
+        code("FORBIDDEN",()->listings.delete(stranger,listing));
+        listings.delete(user(Actor.Role.ADMIN),listing);
+        assertEquals(1,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+    }
+    @Test void httpDeletionRequiresAuthenticationAndOwnerOrAdmin() throws Exception {
+        UUID ownerId=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'owner@example.invalid','disabled','Owner','DONOR')",ownerId);
+        UUID listing=listings.create(new Actor(ownerId,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
+        String url="/api/listings/"+listing;
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
+                .header("Authorization", bearer("recipient1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
+                .header("Authorization", bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(url)
+                .header("Authorization", bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
+        assertEquals("DELETED", listings.get(listing).status());
+        assertEquals(1, jdbc.queryForObject("select count(*) from activity where listing_id=? and type='LISTING_ARCHIVED'", Integer.class, listing));
+        assertEquals("AVAILABLE", jdbc.queryForObject("select details::jsonb->>'previous_status' from activity where listing_id=? and type='LISTING_ARCHIVED'", String.class, listing));
+        UUID adminId=com.tesa.foodbridge.demo.DemoSeed.id("admin");
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'admin@example.invalid','disabled','Admin','ADMIN')",adminId);
+        UUID another=listing();
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+another)
+                .header("Authorization", bearer("admin1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNoContent());
+    }
+    @Test void deletedRowsAreExcludedBeforePublicAndOwnerPagination() {
+        var visible=new HashSet<UUID>();
+        for(int i=0;i<6;i++) {
+            UUID id=listing();
+            if(i%2==0) {
+                listings.delete(donor,id);
+                jdbc.update("update listings set created_at=clock_timestamp()+interval '1 day' where id=?",id);
+            } else visible.add(id);
+        }
+        var seen=new HashSet<UUID>();
+        for(int offset=0;offset<3;offset+=2) {
+            var page=listings.browse(offset,2);
+            assertEquals(Math.min(2,3-offset),page.size());
+            assertEquals(page,listings.browseMine(donor,offset,2));
+            page.forEach(row->{assertNotEquals("DELETED",row.status());assertTrue(seen.add(row.id()));});
+        }
+        assertEquals(visible,seen);
+        assertTrue(listings.browse(3,2).isEmpty());
+        assertTrue(listings.browseMine(donor,3,2).isEmpty());
+    }
+    @Test void deletedHistoryPreservesAuthorizedRequestsAndIdempotencyReplay() {
+        UUID listing=listing();
+        UUID pending=requests.request(recipient,listing,"history-replay").id();
+        UUID declined=requests.request(user(Actor.Role.RECIPIENT),listing,null).id();
+        listings.delete(donor,listing);
+        code("LISTING_NOT_FOUND",()->listings.getPublic(listing));
+        assertEquals("DELETED",listings.getHistorical(donor,listing).status());
+        assertEquals("DELETED",listings.getHistorical(recipient,listing).status());
+        assertEquals("DELETED",listings.getHistorical(user(Actor.Role.ADMIN),listing).status());
+        code("FORBIDDEN",()->listings.getHistorical(user(Actor.Role.DONOR),listing));
+        code("FORBIDDEN",()->listings.getHistorical(user(Actor.Role.RECIPIENT),listing));
+        assertEquals(pending,requests.request(recipient,listing,"history-replay").id());
+        assertEquals("CANCELLED",requests.cancel(recipient,pending).status());
+        assertEquals("DECLINED",requests.decline(donor,declined).status());
+    }
+    @Test void historicalHttpDetailRequiresOwnerRequesterOrRealAdminIdentity() throws Exception {
+        UUID ownerId=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        UUID recipientId=com.tesa.foodbridge.demo.DemoSeed.id("recipient1");
+        UUID adminId=com.tesa.foodbridge.demo.DemoSeed.id("admin");
+        for(var identity:List.of(Map.entry(ownerId,"DONOR"),Map.entry(recipientId,"RECIPIENT"),Map.entry(adminId,"ADMIN")))
+            jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,'disabled','History test',?)",identity.getKey(),identity.getKey()+"@example.invalid",identity.getValue());
+        UUID listing=listings.create(new Actor(ownerId,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
+        requests.request(new Actor(recipientId,Actor.Role.RECIPIENT),listing,null);
+        listings.delete(new Actor(ownerId,Actor.Role.DONOR),listing);
+        String url="/api/listings/"+listing;
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(url))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound());
+        for(String login:List.of("donor1:donor123","recipient1:recipient123","admin1:admin123"))
+            http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(url)
+                    .header("Authorization",bearer(login.split(":")[0])))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("DELETED"));
+        UUID unrelated=listing();listings.delete(donor,unrelated);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/listings/"+unrelated)
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+    }
+
+    @Test void deletionAndApprovalSerializeWithoutLosingHistory() throws Exception {
+        UUID listing=listing(), pending=request(listing);
+        var results=parallel(List.of("DELETE","APPROVE"),op->{
+            try { if(op.equals("DELETE")) listings.delete(donor,listing); else requests.approve(donor,pending); return op; }
+            catch(RuleViolation e) { return e.code(); }
+        });
+        if(results.contains("DELETE")) {
+            assertTrue(results.contains("LISTING_NOT_FOUND"));
+            assertEquals("DELETED",listings.get(listing).status());
+            assertEquals("PENDING",requests.get(recipient,pending).status());
+            assertEquals(0,count("select count(*) from handovers"));
+            assertEquals(1,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+        } else {
+            assertTrue(results.contains("APPROVE"));
+            assertTrue(results.contains("LISTING_NOT_DELETABLE"));
+            assertEquals("RESERVED",listings.get(listing).status());
+            assertEquals(1,count("select count(*) from handovers"));
+            assertEquals(0,count("select count(*) from activity where type='LISTING_ARCHIVED'"));
+        }
+    }
+    @Test void protectedStatesReturnHttpConflict() throws Exception {
+        UUID owner=com.tesa.foodbridge.demo.DemoSeed.id("donor1");
+        jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,'owner@example.invalid','disabled','Owner','DONOR')",owner);
+        for(String status:List.of("RESERVED","COLLECTED","REVERSED","EXPIRED")) {
+            UUID id=listings.create(new Actor(owner,Actor.Role.DONOR),command(BigDecimal.ONE)).id();
+            jdbc.update("update listings set status=? where id=?",status,id);
+            http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/listings/"+id).header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
+            assertEquals(status,listings.get(id).status());
+        }
     }
 
     // --------------------------------------------------

@@ -1,5 +1,4 @@
 openapi: 3.0.3
-
 info:
   title: FoodBridge API
   description: API for coordinating surplus food listings between donors and recipients.
@@ -8,15 +7,24 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
+  - url: https://foodbridge-backend-rg9f.onrender.com
+    description: Production server on Render
 
-  - url: https://YOUR-FOODBRIDGE-RENDER-URL.onrender.com
-    description: Render deployment
+tags:
+  - name: Authentication
+  - name: Listings
+  - name: Requests
+  - name: Handovers
+  - name: Administration
+  - name: Activity
 
 paths:
-
   /api/auth/login:
     post:
-      summary: Authenticate a user
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate a demo user using email and password
+      security: []
       requestBody:
         required: true
         content:
@@ -30,14 +38,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing or invalid login fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Invalid credentials
 
   /api/auth/me:
     get:
-      summary: Get current user profile
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Get the authenticated user's profile
       security:
-        - basicAuth: []
+        - bearerAuth: []
       responses:
         '200':
           description: Current authenticated user
@@ -46,59 +62,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/MeResponse'
         '401':
-          description: Authentication required
+          $ref: '#/components/responses/Unauthorized'
 
   /api/listings:
     get:
+      tags: [Listings]
+      operationId: browseListings
       summary: Browse food listings
+      description: Public browsing is allowed. Set mine=true to retrieve the authenticated donor's own listings.
+      security: []
       parameters:
         - name: category
           in: query
+          required: false
           schema:
             type: string
-
         - name: pickupArea
           in: query
+          required: false
           schema:
             type: string
-
         - name: availability
           in: query
+          required: false
           schema:
             type: string
-            enum:
-              - AVAILABLE
-              - RESERVED
-              - COLLECTED
-              - REVERSED
-              - EXPIRED
-
+            enum: [AVAILABLE, RESERVED, COLLECTED, REVERSED, EXPIRED]
         - name: keyword
           in: query
+          required: false
           schema:
             type: string
-
         - name: mine
           in: query
+          required: false
+          description: When true, authentication is required and the caller must be the donor or an administrator.
           schema:
             type: boolean
             default: false
-
         - name: offset
           in: query
+          required: false
           schema:
             type: integer
             minimum: 0
             default: 0
-
         - name: limit
           in: query
+          required: false
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 50
-
       responses:
         '200':
           description: Listings returned
@@ -108,17 +124,22 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ListingResponse'
-
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Authentication required when mine=true
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Donor or admin required when mine=true
-
+          $ref: '#/components/responses/Forbidden'
     post:
+      tags: [Listings]
+      operationId: createListing
       summary: Create a food listing
       security:
-        - basicAuth: []
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -132,30 +153,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
-
         '400':
           description: Invalid listing data
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Donor role required
+          $ref: '#/components/responses/Forbidden'
+
+  /api/listings/images:
+    post:
+      tags: [Listings]
+      operationId: uploadListingImage
+      summary: Upload a listing image to Cloudinary
+      description: Upload an image and return its hosted URL. Authentication is required by the service security configuration.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [imageUrl]
+                properties:
+                  imageUrl:
+                    type: string
+                    format: uri
+        '400':
+          description: Empty or invalid image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/listings/{listingId}:
+
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
     get:
+      tags: [Listings]
+      operationId: getListing
       summary: Get a food listing
-      parameters:
-        - name: listingId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      description: Deleted listings return 404 to anonymous callers. Authenticated historical access requires the owning donor, an admin, or a recipient with a request for the listing.
+      security:
+        - {}
+        - bearerAuth: []
+
+
       responses:
         '200':
           description: Listing returned
@@ -164,25 +226,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListingResponse'
 
+        '403':
+          description: Historical listing access is not permitted
+
         '404':
           description: Listing not found
+    put:
+      tags: [Listings]
+      operationId: updateListing
+      summary: Update an existing listing
+      description: Only the listing owner may edit their listing, subject to the service's business rules.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateListingRequest'
+      responses:
+        '200':
+          description: Listing updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingResponse'
+        '400':
+          description: Invalid listing data
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Listing not found
+        '409':
+          description: Listing is not AVAILABLE and cannot be edited
+    delete:
+      tags: [Listings]
+      operationId: deleteListing
+      summary: Soft-delete a listing and audit its previous state
+      description: Owning donor or admin only. Only AVAILABLE listings may transition to DELETED. Authorized repeated deletion returns 204 without another audit. Other states return 409. Deletion and archive auditing are atomic and preserve requests, handovers and activity history.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Deleted or already deleted
+        '401':
+          description: Authentication required
+        '403':
+          description: Listing owner or admin required
+        '404':
+          description: Listing not found
+        '409':
+          description: Listing is RESERVED, COLLECTED, REVERSED or EXPIRED
+
 
   /api/listings/{listingId}/requests:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
     get:
+      tags: [Requests]
+      operationId: getListingRequests
       summary: Get requests for a listing
       security:
-        - basicAuth: []
-      parameters:
-        - name: listingId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - bearerAuth: []
       responses:
         '200':
           description: Requests returned
@@ -192,35 +303,26 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FoodRequest'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Donor owner or admin required
-
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Listing not found
-
     post:
+      tags: [Requests]
+      operationId: requestFoodListing
       summary: Request a food listing
+      description: The Idempotency-Key header identifies a repeat submission of the same request.
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
-        - name: listingId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-
         - name: Idempotency-Key
           in: header
           required: true
           schema:
             type: string
             maxLength: 200
-
       responses:
         '201':
           description: Request created
@@ -228,13 +330,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-
+        '400':
+          description: Missing or invalid idempotency key or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Recipient role required
-
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Listing not found
         '409':
           description: Listing unavailable or idempotency key reused
           content:
@@ -244,17 +351,19 @@ paths:
 
   /api/requests:
     get:
+      tags: [Requests]
+      operationId: getMyRequests
       summary: Get the authenticated recipient's requests
       security:
-        - basicAuth: []
+        - bearerAuth: []
       parameters:
         - name: mine
           in: query
-          required: true
+          required: false
+          description: Must be true. The service rejects the request when false.
           schema:
             type: boolean
-            enum:
-              - true
+            default: false
       responses:
         '200':
           description: Requests returned
@@ -264,25 +373,26 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FoodRequest'
-
+        '400':
+          description: The mine parameter must be true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Recipient role required
+          $ref: '#/components/responses/Forbidden'
 
   /api/requests/{requestId}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
     get:
+      tags: [Requests]
+      operationId: getFoodRequest
       summary: Get a food request
       security:
-        - basicAuth: []
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - bearerAuth: []
       responses:
         '200':
           description: Request returned
@@ -290,267 +400,371 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Request owner, listing donor, or admin required
-
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Request not found
 
   /api/requests/{requestId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
     patch:
+      tags: [Requests]
+      operationId: approveFoodRequest
       summary: Approve a food request
       security:
-        - basicAuth: []
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - bearerAuth: []
       responses:
         '200':
-          description: Approved
+          description: Request approved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Donor owner or admin required
-
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Request not found
-
         '409':
-          description: Already reserved, request not pending, or daily distribution priority restriction
+          description: Listing already reserved or request is not pending
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/requests/{requestId}/decline:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
     patch:
+      tags: [Requests]
+      operationId: declineFoodRequest
       summary: Decline a food request
       security:
-        - basicAuth: []
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - bearerAuth: []
       responses:
         '200':
-          description: Declined
+          description: Request declined
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Donor owner or admin required
-
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Request not found
-
         '409':
-          description: Request not pending
+          description: Request is not pending
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/requests/{requestId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
     post:
+      tags: [Requests]
+      operationId: cancelFoodRequest
       summary: Cancel own pending food request
       security:
-        - basicAuth: []
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - bearerAuth: []
       responses:
         '200':
-          description: Cancelled
+          description: Request cancelled
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FoodRequest'
-
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Recipient owner required
-
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Request not found
-
         '409':
-          description: Request not pending
+          description: Request is not pending
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/admin/distribution/today:
-    get:
-      tags:
-        - Administration
-      operationId: getTodayDistribution
-      summary: Get today's fair-distribution status
-      description: Returns daily distribution statistics using Africa/Lagos calendar days.
+  /api/requests/{requestId}/collected:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Handovers]
+      operationId: markRequestCollected
+      summary: Mark the approved food request as collected
       security:
-        - basicAuth: []
+        - bearerAuth: []
       responses:
         '200':
-          description: Daily distribution status
+          description: Collection confirmed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DailyDistributionSummary'
-
+                $ref: '#/components/schemas/HandoverActionResponse'
         '401':
-          description: Authentication required
-
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Admin role required
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Request or handover not found
+        '409':
+          description: Handover is not in a collectable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/handovers/{handoverId}/reverse:
+    parameters:
+      - name: handoverId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [Handovers]
+      operationId: reverseHandover
+      summary: Reverse a completed handover
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Handover reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverActionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Handover not found
+        '409':
+          description: Handover cannot be reversed in its current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/dashboard:
+    get:
+      tags: [Administration]
+      operationId: getAdminDashboard
+      summary: Get administrator dashboard statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/activity:
+    get:
+      tags: [Activity]
+      operationId: getRecentActivity
+      summary: Get recent activity records
+      description: Administrator-only endpoint. The default limit is 20 and the maximum is 100.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Recent activity records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityResponse'
+        '400':
+          description: Limit must be between 1 and 100
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+          /api/admin/distribution/today:
+            get:
+              tags:
+                - Administration
+              operationId: getTodayDistribution
+              summary: Get today's fair-distribution status
+              description: Returns daily distribution statistics using Africa/Lagos calendar days.
+              security:
+                - bearerAuth: [ ]
+              responses:
+                '200':
+                  description: Daily distribution status
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/DailyDistributionSummary'
+                '401':
+                  description: Authentication required
+                '403':
+                  description: Admin role required
+
 
 components:
-
   securitySchemes:
-    basicAuth:
+    bearerAuth:
       type: http
-      scheme: basic
+      scheme: bearer
+      bearerFormat: opaque
+
+  parameters:
+    ListingId:
+      name: listingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Authentication required or token invalid
+    Forbidden:
+      description: Authenticated user does not have permission
 
   schemas:
-
     LoginRequest:
       type: object
-      required:
-        - username
-        - password
+      required: [email, password]
       properties:
-        username:
+        email:
           type: string
+          format: email
         password:
           type: string
           format: password
 
+    LoginResponse:
+      type: object
+      required: [token, id, name, role, organisationName, email]
+      properties:
+        token:
+          type: string
+          description: Opaque Bearer token used to authenticate subsequent requests.
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [DONOR, RECIPIENT, ADMIN]
+        organisationName:
+          type: string
+        email:
+          type: string
+          format: email
+
+    MeResponse:
+      type: object
+      required: [id, name, role, organisationName, email]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [DONOR, RECIPIENT, ADMIN]
+        organisationName:
+          type: string
+        email:
+          type: string
+          format: email
+
     CreateListingRequest:
       type: object
-      required:
-        - title
-        - description
-        - category
-        - quantity
-        - unit
-        - pickupArea
-        - collectionDeadline
+      required: [foodName, description, category, quantity, unit, pickupArea, collectionDeadline]
       properties:
-        title:
+        foodName:
           type: string
-
         description:
           type: string
-
         category:
           type: string
-          enum:
-            - PREPARED_MEALS
-            - PRODUCE
-            - BAKERY
-            - DAIRY
-            - PANTRY
-            - OTHER
-
+          enum: [PREPARED_MEALS, PRODUCE, BAKERY, DAIRY, PANTRY, OTHER]
         quantity:
           type: number
           minimum: 0
-
         unit:
           type: string
-          enum:
-            - PORTIONS
-            - KG
-            - LITRES
-            - ITEMS
-            - BOXES
-
+          enum: [PORTIONS, KG, LITRES, ITEMS, BOXES]
         imageReference:
           type: string
           nullable: true
-
         pickupArea:
           type: string
-
         collectionDeadline:
           type: string
           format: date-time
 
     ListingResponse:
       type: object
-      required:
-        - id
-        - title
-        - description
-        - category
-        - quantity
-        - unit
-        - pickupArea
-        - collectionDeadline
-        - state
-        - donorId
-        - donorName
-        - createdAt
-        - pendingRequestCount
+      required: [id, foodName, description, category, quantity, unit, imageReference, pickupArea, collectionDeadline, status, donorId, donorName, createdAt, pendingRequestCount]
       properties:
         id:
           type: string
           format: uuid
-
-        title:
+        foodName:
           type: string
-
         description:
           type: string
-
         category:
           type: string
-
         quantity:
           type: number
-
         unit:
           type: string
-
         imageReference:
           type: string
           nullable: true
-
         pickupArea:
           type: string
-
         collectionDeadline:
           type: string
           format: date-time
-
-        state:
+        status:
           type: string
           enum:
             - AVAILABLE
@@ -558,125 +772,120 @@ components:
             - COLLECTED
             - REVERSED
             - EXPIRED
+            - DELETED
 
         donorId:
           type: string
           format: uuid
-
         donorName:
           type: string
-
         createdAt:
           type: string
           format: date-time
-
         pendingRequestCount:
           type: integer
           minimum: 0
 
     FoodRequest:
       type: object
-      required:
-        - id
-        - listingId
-        - requesterId
-        - requesterName
-        - state
-        - createdAt
+      required: [id, listingId, recipientId, recipientName, status, createdAt]
       properties:
         id:
           type: string
           format: uuid
-
         listingId:
           type: string
           format: uuid
-
-        requesterId:
+        recipientId:
           type: string
           format: uuid
-
-        requesterName:
+        recipientName:
           type: string
-
-        state:
+        status:
           type: string
-          enum:
-            - PENDING
-            - APPROVED
-            - DECLINED
-            - CANCELLED
-            - EXPIRED
-
+          enum: [PENDING, APPROVED, DECLINED, CANCELLED, EXPIRED]
         createdAt:
           type: string
           format: date-time
 
-    LoginResponse:
+    HandoverActionResponse:
       type: object
-      required:
-        - token
-        - id
-        - name
-        - role
-        - organisationName
+      required: [message, status]
       properties:
-        token:
+        message:
           type: string
+        status:
+          type: string
+          enum: [COLLECTED, REVERSED]
 
+    AdminDashboardResponse:
+      type: object
+      required: [totalUsers, totalDonors, totalRecipients, totalListings, availableListings, reservedListings, collectedListings, totalRequests, pendingRequests, completedHandovers]
+      properties:
+        totalUsers:
+          type: integer
+          format: int64
+        totalDonors:
+          type: integer
+          format: int64
+        totalRecipients:
+          type: integer
+          format: int64
+        totalListings:
+          type: integer
+          format: int64
+        availableListings:
+          type: integer
+          format: int64
+        reservedListings:
+          type: integer
+          format: int64
+        collectedListings:
+          type: integer
+          format: int64
+        totalRequests:
+          type: integer
+          format: int64
+        pendingRequests:
+          type: integer
+          format: int64
+        completedHandovers:
+          type: integer
+          format: int64
+
+    ActivityResponse:
+      type: object
+      required: [id, actorName, type, listingId, listingTitle, details, createdAt]
+      properties:
         id:
           type: string
-
-        name:
+          format: uuid
+        actorName:
           type: string
-
-        role:
+          nullable: true
+        type:
           type: string
-          enum:
-            - DONOR
-            - RECIPIENT
-            - ADMIN
-
-        organisationName:
+        listingId:
           type: string
-
-    MeResponse:
-      type: object
-      required:
-        - id
-        - name
-        - role
-        - organisationName
-      properties:
-        id:
+          format: uuid
+          nullable: true
+        listingTitle:
           type: string
-
-        name:
+          nullable: true
+        details:
           type: string
-
-        role:
+        createdAt:
           type: string
-          enum:
-            - DONOR
-            - RECIPIENT
-            - ADMIN
-
-        organisationName:
-          type: string
+          format: date-time
 
     ErrorResponse:
       type: object
-      required:
-        - code
-        - message
-        - timestamp
+      required: [code, message, timestamp]
       properties:
         code:
           type: string
-
         message:
           type: string
-
         timestamp:
           type: string
           format: date-time
@@ -694,22 +903,17 @@ components:
         totalRecipients:
           type: integer
           format: int64
-
         availableListings:
           type: integer
           format: int64
-
         approvedListingsToday:
           type: integer
           format: int64
-
         recipientsServedToday:
           type: integer
           format: int64
-
         recipientsWaitingToday:
           type: integer
           format: int64
-
         firstRoundInProgress:
           type: boolean

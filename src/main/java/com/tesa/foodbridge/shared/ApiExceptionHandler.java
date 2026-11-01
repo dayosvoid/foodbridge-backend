@@ -55,7 +55,9 @@ public class ApiExceptionHandler {
                  "REQUEST_NOT_FOUND" ->
                     HttpStatus.NOT_FOUND;
 
-            case "LISTING_ALREADY_RESERVED",
+            case "LISTING_NOT_DELETABLE",
+                 "LISTING_NOT_EDITABLE",
+                 "LISTING_ALREADY_RESERVED",
                  "LISTING_EXPIRED",
                  "REQUEST_NOT_PENDING",
                  "IDEMPOTENCY_KEY_REUSED",
