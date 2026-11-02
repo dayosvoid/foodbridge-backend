@@ -45,10 +45,11 @@ public class HandoverController {
 
         users.requireRole(actor.id(), actor.role());
 
-        handovers.completeByDonorOrAdmin(
+        UUID handoverId = handovers.completeByDonorOrAdmin(
                 requestId, actor.id(), admin);
 
         return Map.of(
+                "handoverId", handoverId.toString(),
                 "message", "Food collection confirmed",
                 "status", "COLLECTED"
         );
@@ -74,6 +75,7 @@ public class HandoverController {
                 handoverId, actor.id(), admin);
 
         return Map.of(
+                "handoverId", handoverId.toString(),
                 "message", "Handover reversed successfully",
                 "status", "REVERSED"
         );

@@ -292,7 +292,7 @@ public class DefaultReservationOperations
 
         if (status != null && !status.isBlank()) {
             String normalized = status.trim().toUpperCase(java.util.Locale.ROOT);
-            if (!java.util.Set.of("PENDING", "APPROVED", "DECLINED", "CANCELLED", "EXPIRED").contains(normalized)) {
+            if (!java.util.Set.of("PENDING", "APPROVED", "DECLINED", "CANCELLED", "EXPIRED", "REVERSED").contains(normalized)) {
                 throw new RuleViolation("INVALID_REQUEST");
             }
         }
@@ -331,6 +331,11 @@ public class DefaultReservationOperations
                             "REQUEST_NOT_PENDING"
                     );
                 }
+
+                requests.declineOtherPendingForListing(
+                        request.listingId(),
+                        id
+                );
 
                 handovers.createForApprovedRequest(id);
 

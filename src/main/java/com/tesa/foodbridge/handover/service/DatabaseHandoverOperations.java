@@ -35,7 +35,7 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     @Override
     @Transactional
-    public void completeByDonorOrAdmin(
+    public UUID completeByDonorOrAdmin(
             UUID requestId,
             UUID actorId,
             boolean admin) {
@@ -45,6 +45,7 @@ class DatabaseHandoverOperations implements HandoverOperations {
                    l.donor_id,
                    l.status as listing_status,
                    r.status as request_status,
+                   h.id as handover_id,
                    h.status as handover_status
             from requests r
             join listings l on l.id = r.listing_id
@@ -57,6 +58,7 @@ class DatabaseHandoverOperations implements HandoverOperations {
                         rs.getObject("donor_id", UUID.class),
                         rs.getString("listing_status"),
                         rs.getString("request_status"),
+                        rs.getObject("handover_id", UUID.class),
                         rs.getString("handover_status")
                 },
                 requestId
@@ -68,13 +70,15 @@ class DatabaseHandoverOperations implements HandoverOperations {
         UUID donorId = (UUID) row[1];
         String listingStatus = (String) row[2];
         String requestStatus = (String) row[3];
-        String handoverStatus = (String) row[4];
+        UUID handoverId = (UUID) row[4];
+        String handoverStatus = (String) row[5];
 
         if (!admin && !actorId.equals(donorId)) {
             throw new RuleViolation("FORBIDDEN");
         }
 
         if (!"APPROVED".equals(requestStatus)
+                || handoverId == null
                 || !"AWAITING_COLLECTION".equals(handoverStatus)) {
             throw new RuleViolation("HANDOVER_NOT_PENDING");
         }
@@ -87,9 +91,9 @@ class DatabaseHandoverOperations implements HandoverOperations {
             update handovers
             set status = 'COLLECTED',
                 completed_at = clock_timestamp()
-            where request_id = ?
+            where id = ?
               and status = 'AWAITING_COLLECTION'
-            """, requestId);
+            """, handoverId);
 
         if (updated != 1) {
             throw new RuleViolation("HANDOVER_NOT_PENDING");
@@ -108,6 +112,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
         }
 
         activity.record(actorId, listingId, "COLLECTED");
+
+        return handoverId;
     }
 
     @Override
@@ -121,17 +127,19 @@ class DatabaseHandoverOperations implements HandoverOperations {
             select l.id as listing_id,
                    l.donor_id,
                    l.status as listing_status,
+                   r.id as request_id,
                    h.status as handover_status
             from handovers h
             join requests r on r.id = h.request_id
             join listings l on l.id = r.listing_id
             where h.id = ?
-            for update of h, l
+            for update of h, r, l
             """,
                 (rs, n) -> new Object[]{
                         rs.getObject("listing_id", UUID.class),
                         rs.getObject("donor_id", UUID.class),
                         rs.getString("listing_status"),
+                        rs.getObject("request_id", UUID.class),
                         rs.getString("handover_status")
                 },
                 handoverId
@@ -142,7 +150,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
         UUID listingId = (UUID) row[0];
         UUID donorId = (UUID) row[1];
         String listingStatus = (String) row[2];
-        String handoverStatus = (String) row[3];
+        UUID requestId = (UUID) row[3];
+        String handoverStatus = (String) row[4];
 
         if (!admin && !actorId.equals(donorId)) {
             throw new RuleViolation("FORBIDDEN");
@@ -168,9 +177,21 @@ class DatabaseHandoverOperations implements HandoverOperations {
             throw new RuleViolation("HANDOVER_NOT_COLLECTED");
         }
 
+        int requestUpdated = jdbc.update("""
+            update requests
+            set status = 'REVERSED',
+                decided_at = clock_timestamp()
+            where id = ?
+              and status = 'APPROVED'
+            """, requestId);
+
+        if (requestUpdated != 1) {
+            throw new RuleViolation("HANDOVER_NOT_COLLECTED");
+        }
+
         int listingUpdated = jdbc.update("""
             update listings
-            set status = 'REVERSED',
+            set status = 'AVAILABLE',
                 updated_at = clock_timestamp()
             where id = ?
               and status = 'COLLECTED'
