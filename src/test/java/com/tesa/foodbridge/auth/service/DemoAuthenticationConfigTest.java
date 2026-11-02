@@ -47,4 +47,17 @@ class DemoAuthenticationConfigTest {
             });
         }
     }
+    @Test void durableTokensSurviveRestartAndRespectRevocation() {
+        var service1=new AuthTokenService(null,"test-secret-key");
+        String token=service1.createToken("donor1");
+        assertEquals(java.util.Optional.of("donor1"),service1.getUsername(token));
+
+        // Simulate container restart with a fresh AuthTokenService instance sharing the same secret
+        var serviceAfterRestart=new AuthTokenService(null,"test-secret-key");
+        assertEquals(java.util.Optional.of("donor1"),serviceAfterRestart.getUsername(token));
+
+        // Revoking invalidates the token
+        serviceAfterRestart.revokeToken(token);
+        assertTrue(serviceAfterRestart.getUsername(token).isEmpty());
+    }
 }

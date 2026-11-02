@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -118,8 +119,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     @Override
     @Transactional
-    public void reverseByDonorOrAdmin(
-            UUID handoverId,
+    public UUID reverseByDonorOrAdmin(
+            UUID handoverOrRequestId,
             UUID actorId,
             boolean admin) {
 
@@ -128,11 +129,13 @@ class DatabaseHandoverOperations implements HandoverOperations {
                    l.donor_id,
                    l.status as listing_status,
                    r.id as request_id,
+                   r.status as request_status,
+                   h.id as handover_id,
                    h.status as handover_status
             from handovers h
             join requests r on r.id = h.request_id
             join listings l on l.id = r.listing_id
-            where h.id = ?
+            where h.id = ? or r.id = ?
             for update of h, r, l
             """,
                 (rs, n) -> new Object[]{
@@ -140,9 +143,12 @@ class DatabaseHandoverOperations implements HandoverOperations {
                         rs.getObject("donor_id", UUID.class),
                         rs.getString("listing_status"),
                         rs.getObject("request_id", UUID.class),
+                        rs.getString("request_status"),
+                        rs.getObject("handover_id", UUID.class),
                         rs.getString("handover_status")
                 },
-                handoverId
+                handoverOrRequestId,
+                handoverOrRequestId
         ).stream().findFirst().orElseThrow(
                 () -> new RuleViolation("HANDOVER_NOT_FOUND")
         );
@@ -151,17 +157,20 @@ class DatabaseHandoverOperations implements HandoverOperations {
         UUID donorId = (UUID) row[1];
         String listingStatus = (String) row[2];
         UUID requestId = (UUID) row[3];
-        String handoverStatus = (String) row[4];
+        String requestStatus = (String) row[4];
+        UUID handoverId = (UUID) row[5];
+        String handoverStatus = (String) row[6];
 
         if (!admin && !actorId.equals(donorId)) {
             throw new RuleViolation("FORBIDDEN");
         }
 
-        if (!"COLLECTED".equals(handoverStatus)) {
+        if (!"APPROVED".equals(requestStatus)
+                || !Set.of("AWAITING_COLLECTION", "COLLECTED").contains(handoverStatus)) {
             throw new RuleViolation("HANDOVER_NOT_COLLECTED");
         }
 
-        if (!"COLLECTED".equals(listingStatus)) {
+        if (!Set.of("RESERVED", "COLLECTED").contains(listingStatus)) {
             throw new RuleViolation("LISTING_NOT_COLLECTED");
         }
 
@@ -170,7 +179,7 @@ class DatabaseHandoverOperations implements HandoverOperations {
             set status = 'REVERSED',
                 reversed_at = clock_timestamp()
             where id = ?
-              and status = 'COLLECTED'
+              and status in ('AWAITING_COLLECTION', 'COLLECTED')
             """, handoverId);
 
         if (handoverUpdated != 1) {
@@ -191,10 +200,13 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
         int listingUpdated = jdbc.update("""
             update listings
-            set status = 'AVAILABLE',
+            set status = case
+                    when collection_deadline > clock_timestamp() then 'AVAILABLE'
+                    else 'EXPIRED'
+                end,
                 updated_at = clock_timestamp()
             where id = ?
-              and status = 'COLLECTED'
+              and status in ('RESERVED', 'COLLECTED')
             """, listingId);
 
         if (listingUpdated != 1) {
@@ -202,5 +214,7 @@ class DatabaseHandoverOperations implements HandoverOperations {
         }
 
         activity.record(actorId, listingId, "REVERSED");
+
+        return handoverId;
     }
 }

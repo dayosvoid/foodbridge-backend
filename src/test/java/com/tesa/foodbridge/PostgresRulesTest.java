@@ -891,10 +891,27 @@ class PostgresRulesTest {
         UUID otherPendingReq=requests.request(recipient,listing1,null).id();
         requests.approve(donor1Actor,req1);
 
-        // Auto-declined other pending request in the same transaction
+        // Auto-declined other pending request in the same transaction, and FoodRequestResponse exposes handoverId & handoverStatus
         assertEquals("APPROVED",requests.get(donor1Actor,req1).status());
+        assertNotNull(requests.get(donor1Actor,req1).handoverId());
+        assertEquals("AWAITING_COLLECTION",requests.get(donor1Actor,req1).handoverStatus());
         assertEquals("DECLINED",requests.get(donor1Actor,otherPendingReq).status());
         assertNotNull(requests.get(donor1Actor,otherPendingReq).decidedAt());
+
+        // Verify GET /api/requests/{requestId} returns handoverId and handoverStatus in JSON
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/requests/"+req1)
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.handoverId").isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.handoverStatus").value("AWAITING_COLLECTION"));
+
+        // Verify durable token is persisted in auth_tokens table and authenticates /api/auth/me
+        String durableBearer=bearer("donor1");
+        assertTrue(count("select count(*) from auth_tokens where username='donor1' and revoked=false")>=1);
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/auth/me")
+                .header("Authorization",durableBearer))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.role").value("DONOR"));
 
         // Unrelated donor rejected with 403 FORBIDDEN
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req1+"/collected")
@@ -955,6 +972,39 @@ class PostgresRulesTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.handoverId").isNotEmpty())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("COLLECTED"));
         assertEquals("COLLECTED",listings.get(listing2).status());
+
+        // 3. Reversing an APPROVED (not yet collected) request using requestId:
+        //    Only owning donor may reverse; request -> REVERSED, listing -> AVAILABLE, and listing can be requested/approved again
+        UUID listing3=listings.create(donor1Actor,command(new BigDecimal("12"))).id();
+        UUID req3=requests.request(recipient1Actor,listing3,null).id();
+        requests.approve(donor1Actor,req3);
+        assertEquals("RESERVED",listings.get(listing3).status());
+
+        // Unrelated donor and recipient rejected with 403 FORBIDDEN when trying to reverse by requestId
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req3+"/reverse")
+                .header("Authorization",bearer("donor2")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN"));
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req3+"/reverse")
+                .header("Authorization",bearer("recipient1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("FORBIDDEN"));
+
+        // Owning donor reverses APPROVED (not yet collected) request using requestId -> 200 OK
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/requests/"+req3+"/reverse")
+                .header("Authorization",bearer("donor1")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.handoverId").isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("REVERSED"));
+        assertEquals("REVERSED",requests.get(donor1Actor,req3).status());
+        assertEquals("AVAILABLE",listings.get(listing3).status());
+
+        // Reopened AVAILABLE listing can now accept and approve another eligible request
+        Actor freshRecipient=user(Actor.Role.RECIPIENT);
+        UUID req4=requests.request(freshRecipient,listing3,null).id();
+        requests.approve(donor1Actor,req4);
+        assertEquals("APPROVED",requests.get(donor1Actor,req4).status());
+        assertEquals("RESERVED",listings.get(listing3).status());
     }
 
     @Test void listingDatabaseFilteringPaginationCountAndAvailabilitySemantics() throws Exception {

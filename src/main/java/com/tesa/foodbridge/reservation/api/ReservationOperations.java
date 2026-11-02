@@ -15,8 +15,21 @@ public interface ReservationOperations {
             String requesterName,
             String status,
             Instant createdAt,
-            Instant decidedAt
-    ) {}
+            Instant decidedAt,
+            UUID handoverId,
+            String handoverStatus
+    ) {
+        public RequestView(
+                UUID id,
+                UUID listingId,
+                UUID requesterId,
+                String requesterName,
+                String status,
+                Instant createdAt,
+                Instant decidedAt) {
+            this(id, listingId, requesterId, requesterName, status, createdAt, decidedAt, null, null);
+        }
+    }
 
     RequestView request(
             Actor actor,

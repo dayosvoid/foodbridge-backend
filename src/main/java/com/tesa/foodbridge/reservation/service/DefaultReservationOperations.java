@@ -200,14 +200,38 @@ public class DefaultReservationOperations
             Actor actor,
             UUID id) {
 
-        if (actor.role() != Actor.Role.RECIPIENT) {
-            throw new RuleViolation("FORBIDDEN");
-        }
-
         users.requireRole(
                 actor.id(),
                 actor.role()
         );
+
+        if (actor.role() == Actor.Role.DONOR || actor.role() == Actor.Role.ADMIN) {
+            return tx.execute(s -> {
+                var request = required(id);
+                var listing = listings.get(request.listingId());
+
+                if (actor.role() != Actor.Role.ADMIN
+                        && !actor.id().equals(listing.donorId())) {
+                    throw new RuleViolation("FORBIDDEN");
+                }
+
+                if (!"APPROVED".equals(request.status())) {
+                    throw new RuleViolation("REQUEST_NOT_PENDING");
+                }
+
+                handovers.reverseByDonorOrAdmin(
+                        id,
+                        actor.id(),
+                        actor.role() == Actor.Role.ADMIN
+                );
+
+                return required(id);
+            });
+        }
+
+        if (actor.role() != Actor.Role.RECIPIENT) {
+            throw new RuleViolation("FORBIDDEN");
+        }
 
         return tx.execute(s -> {
 
