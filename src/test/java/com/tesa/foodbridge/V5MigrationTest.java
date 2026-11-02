@@ -16,7 +16,7 @@ class V5MigrationTest {
                 s.execute("insert into listings(id,donor_id,title,description,category,quantity,unit,pickup_area,collection_deadline,status) values ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','Food','Description','OTHER',1,'ITEMS','Lagos',now()+interval '1 day','DELETED')");
                 String before=scalar(s,"select to_jsonb(l)::text from listings l");
                 String history=scalar(s,"select jsonb_agg(to_jsonb(h) order by installed_rank)::text from flyway_schema_history h");
-                var flyway=Flyway.configure().dataSource(db.getJdbcUrl(),db.getUsername(),db.getPassword()).load();
+                var flyway=Flyway.configure().dataSource(db.getJdbcUrl(),db.getUsername(),db.getPassword()).target("5").load();
                 assertEquals(1,flyway.migrate().migrationsExecuted);
                 flyway.validate();
                 assertEquals("-1970444023",scalar(s,"select checksum::text from flyway_schema_history where version='5'"),

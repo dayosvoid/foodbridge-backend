@@ -120,6 +120,24 @@ public class RequestRepository {
         ) == 1;
     }
 
+    public int declineOtherPendingForListing(
+            UUID listingId,
+            UUID approvedRequestId) {
+
+        return jdbc.update(
+                """
+                update requests
+                set status='DECLINED',
+                    decided_at=clock_timestamp()
+                where listing_id=?
+                  and id<>?
+                  and status='PENDING'
+                """,
+                listingId,
+                approvedRequestId
+        );
+    }
+
     public boolean decline(UUID id) {
 
         return jdbc.update(
