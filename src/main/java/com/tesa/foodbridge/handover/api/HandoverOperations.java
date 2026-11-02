@@ -12,8 +12,8 @@ public interface HandoverOperations {
             boolean admin
     );
 
-    void reverseByDonorOrAdmin(
-            UUID handoverId,
+    UUID reverseByDonorOrAdmin(
+            UUID handoverOrRequestId,
             UUID actorId,
             boolean admin
     );

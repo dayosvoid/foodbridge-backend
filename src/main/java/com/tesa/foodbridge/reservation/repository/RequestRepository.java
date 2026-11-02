@@ -40,13 +40,22 @@ public class RequestRepository {
                             ? null
                             : r.getTimestamp(
                             "decided_at"
-                    ).toInstant()
+                    ).toInstant(),
+                    r.getObject(
+                            "handover_id",
+                            UUID.class
+                    ),
+                    r.getString(
+                            "handover_status"
+                    )
             );
 
     private static final String SELECT = """
-        select r.*, u.display_name as requester_name
+        select r.*, u.display_name as requester_name,
+               h.id as handover_id, h.status as handover_status
         from requests r
         join users u on u.id=r.requester_id
+        left join handovers h on h.request_id=r.id
         """;
 
     public RequestRepository(

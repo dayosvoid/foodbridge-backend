@@ -99,6 +99,8 @@ public class ListingController {
         listings.delete(actorFactory.from(authentication), listingId);
     }
 
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth")
     @PostMapping(value = "/images", consumes = "multipart/form-data")
     public Map<String, String> uploadImage(
             @RequestParam("file") MultipartFile file) throws IOException {
