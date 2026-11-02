@@ -58,6 +58,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+
+                        .requestMatchers(
                                 "/actuator/health",
                                 "/api/auth/login"
                         ).permitAll()
@@ -97,6 +102,7 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(
                 List.of(
+                        "https://food-bridge-ruby.vercel.app",
                         "https://frontend-six-zeta-39.vercel.app",
                         "http://localhost:5173"
                 )
@@ -114,11 +120,19 @@ public class SecurityConfig {
         );
 
         configuration.setAllowedHeaders(
-                List.of("*")
+                List.of(
+                        "Authorization",
+                        "Content-Type",
+                        "X-Request-Id",
+                        "Idempotency-Key"
+                )
         );
 
         configuration.setExposedHeaders(
-                List.of("X-Request-Id")
+                List.of(
+                        "X-Request-Id",
+                        "X-Total-Count"
+                )
         );
 
         configuration.setAllowCredentials(true);

@@ -47,6 +47,21 @@ public interface ListingOperations {
         }
     }
 
+    record ListingFilter(
+            String category,
+            String pickupArea,
+            String availability,
+            String keyword
+    ) {
+        public static final ListingFilter NONE =
+                new ListingFilter(null, null, null, null);
+    }
+
+    record ListingPage(
+            List<ListingView> items,
+            long totalCount
+    ) {}
+
     ListingView create(Actor actor, CreateListing command);
 
     ListingView update(Actor actor, UUID id, CreateListing command);
@@ -64,8 +79,19 @@ public interface ListingOperations {
 
     List<ListingView> browse(int offset, int limit);
 
+    ListingPage browse(ListingFilter filter, int offset, int limit);
+
+    ListingPage browseAdmin(Actor actor, ListingFilter filter, int offset, int limit);
+
     List<ListingView> browseMine(
             Actor actor,
+            int offset,
+            int limit
+    );
+
+    ListingPage browseMine(
+            Actor actor,
+            ListingFilter filter,
             int offset,
             int limit
     );

@@ -51,7 +51,19 @@ public interface ReservationOperations {
             UUID listingId
     );
 
+    record RequestPage(
+            List<RequestView> items,
+            long totalCount
+    ) {}
+
     List<RequestView> mine(
             Actor actor
+    );
+
+    RequestPage browseAll(
+            Actor actor,
+            String status,
+            int offset,
+            int limit
     );
 }

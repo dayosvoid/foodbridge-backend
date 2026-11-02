@@ -38,39 +38,67 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     @Override
     @Transactional(noRollbackFor=com.tesa.foodbridge.shared.DeadlineExpired.class)
-    public void completeByDonorOrAdmin(
+    public UUID completeByDonorOrAdmin(
             UUID requestId,
             UUID actorId,
             boolean admin) {
 
         authorizeAndLock(requestId, false, actorId, admin, true);
 
-        UUID listingId;
+        var row = jdbc.query("""
+            select l.id as listing_id,
+                   l.donor_id,
+                   l.status as listing_status,
+                   r.status as request_status,
+                   h.id as handover_id,
+                   h.status as handover_status
+            from requests r
+            join listings l on l.id = r.listing_id
+            left join handovers h on h.request_id = r.id
+            where r.id = ?
+            for update of r, l
+            """,
+                (rs, n) -> new Object[]{
+                        rs.getObject("listing_id", UUID.class),
+                        rs.getObject("donor_id", UUID.class),
+                        rs.getString("listing_status"),
+                        rs.getString("request_status"),
+                        rs.getObject("handover_id", UUID.class),
+                        rs.getString("handover_status")
+                },
+                requestId
+        ).stream().findFirst().orElseThrow(
+                () -> new RuleViolation("REQUEST_NOT_FOUND")
+        );
 
-        try {
-            listingId = jdbc.queryForObject("""
-                select l.id
-                from handovers h
-                join requests r on r.id = h.request_id
-                join listings l on l.id = r.listing_id
-                where r.id = ?
-                  and r.status = 'APPROVED'
-                  and h.status = 'AWAITING_COLLECTION'
-                  and (? = true or l.donor_id = ?)
-                for update of h, r, l
-                """, UUID.class, requestId, admin, actorId);
+        UUID listingId = (UUID) row[0];
+        UUID donorId = (UUID) row[1];
+        String listingStatus = (String) row[2];
+        String requestStatus = (String) row[3];
+        UUID handoverId = (UUID) row[4];
+        String handoverStatus = (String) row[5];
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-            throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if (!admin && !actorId.equals(donorId)) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+
+        if (!"APPROVED".equals(requestStatus)
+                || handoverId == null
+                || !"AWAITING_COLLECTION".equals(handoverStatus)) {
+            throw new RuleViolation("HANDOVER_NOT_PENDING");
+        }
+
+        if (!"RESERVED".equals(listingStatus)) {
+            throw new RuleViolation("LISTING_NOT_RESERVED");
         }
 
         int updated = jdbc.update("""
             update handovers
             set status = 'COLLECTED',
                 completed_at = clock_timestamp()
-            where request_id = ?
+            where id = ?
               and status = 'AWAITING_COLLECTION'
-            """, requestId);
+            """, handoverId);
 
         if (updated != 1) {
             throw new RuleViolation("HANDOVER_NOT_PENDING");
@@ -89,6 +117,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
         }
 
         activity.record(actorId, listingId, "COLLECTED");
+
+        return handoverId;
     }
 
     @Override
@@ -100,23 +130,46 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
         authorizeAndLock(handoverId, true, actorId, admin, false);
 
-        UUID listingId;
+        var row = jdbc.query("""
+            select l.id as listing_id,
+                   l.donor_id,
+                   l.status as listing_status,
+                   r.id as request_id,
+                   h.status as handover_status
+            from handovers h
+            join requests r on r.id = h.request_id
+            join listings l on l.id = r.listing_id
+            where h.id = ?
+            for update of h, r, l
+            """,
+                (rs, n) -> new Object[]{
+                        rs.getObject("listing_id", UUID.class),
+                        rs.getObject("donor_id", UUID.class),
+                        rs.getString("listing_status"),
+                        rs.getObject("request_id", UUID.class),
+                        rs.getString("handover_status")
+                },
+                handoverId
+        ).stream().findFirst().orElseThrow(
+                () -> new RuleViolation("HANDOVER_NOT_FOUND")
+        );
 
-        try {
-            listingId = jdbc.queryForObject("""
-                select l.id
-                from handovers h
-                join requests r on r.id = h.request_id
-                join listings l on l.id = r.listing_id
-                where h.id = ?
-                  and h.status = 'COLLECTED'
-                  and l.status = 'COLLECTED'
-                  and (? = true or l.donor_id = ?)
-                for update of h, l
-                """, UUID.class, handoverId, admin, actorId);
+        UUID listingId = (UUID) row[0];
+        UUID donorId = (UUID) row[1];
+        String listingStatus = (String) row[2];
+        UUID requestId = (UUID) row[3];
+        String handoverStatus = (String) row[4];
 
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-            throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if (!admin && !actorId.equals(donorId)) {
+            throw new RuleViolation("FORBIDDEN");
+        }
+
+        if (!"COLLECTED".equals(handoverStatus)) {
+            throw new RuleViolation("HANDOVER_NOT_COLLECTED");
+        }
+
+        if (!"COLLECTED".equals(listingStatus)) {
+            throw new RuleViolation("LISTING_NOT_COLLECTED");
         }
 
         int handoverUpdated = jdbc.update("""
@@ -131,9 +184,21 @@ class DatabaseHandoverOperations implements HandoverOperations {
             throw new RuleViolation("HANDOVER_NOT_COLLECTED");
         }
 
+        int requestUpdated = jdbc.update("""
+            update requests
+            set status = 'REVERSED',
+                decided_at = clock_timestamp()
+            where id = ?
+              and status = 'APPROVED'
+            """, requestId);
+
+        if (requestUpdated != 1) {
+            throw new RuleViolation("HANDOVER_NOT_COLLECTED");
+        }
+
         int listingUpdated = jdbc.update("""
             update listings
-            set status = 'REVERSED',
+            set status = 'AVAILABLE',
                 updated_at = clock_timestamp()
             where id = ?
               and status = 'COLLECTED'
@@ -148,9 +213,14 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     private void authorizeAndLock(UUID id, boolean byHandover, UUID actor, boolean admin, boolean enforceDeadline) {
         var ids=jdbc.queryForList("select l.id from listings l join requests r on r.listing_id=l.id "
-                +"join handovers h on h.request_id=r.id where "+(byHandover?"h.id":"r.id")
+                +"left join handovers h on h.request_id=r.id where "+(byHandover?"h.id":"r.id")
                 +"=? and (? or l.donor_id=?)", UUID.class,id,admin,actor);
-        if(ids.isEmpty()) throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if(ids.isEmpty()) {
+            boolean exists = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "select exists(select 1 from requests r left join handovers h on h.request_id=r.id where "
+                    + (byHandover ? "h.id" : "r.id") + "=?)", Boolean.class, id));
+            throw new RuleViolation(exists ? "FORBIDDEN" : (byHandover ? "HANDOVER_NOT_FOUND" : "REQUEST_NOT_FOUND"));
+        }
         if(enforceDeadline) {
             if(expiration.expireLocked(ids.get(0))) throw new com.tesa.foodbridge.shared.DeadlineExpired();
         } else expiration.lockAggregate(ids.get(0));

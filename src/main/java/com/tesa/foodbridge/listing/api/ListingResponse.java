@@ -19,5 +19,7 @@ public record ListingResponse(
         Instant createdAt,
         int pendingRequestCount,
         Instant expiredAt,
-        String expirationReason
+        String expirationReason,
+        boolean deleted,
+        Instant deletedAt
 ) {}

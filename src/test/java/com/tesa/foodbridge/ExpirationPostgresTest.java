@@ -69,6 +69,143 @@ class ExpirationPostgresTest {
         assertNotEquals(row.collectionDeadline(),row.expiredAt());
         assertEquals(row.expiredAt(),jdbc.queryForObject("select created_at from activity where type='LISTING_EXPIRED'",Timestamp.class).toInstant());
     }
+
+
+
+
+
+    @ParameterizedTest @ValueSource(strings={"reverse-reverse","reverse-expire"})
+    void lifecycleRacesHaveOneConsistentOutcome(String scenario) throws Exception {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=jdbc.queryForObject("select id from handovers where request_id=?",UUID.class,r);
+        handovers.completeByDonorOrAdmin(r,donor.id(),false);due(id);
+        var ready=new CountDownLatch(2);var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            java.util.function.Function<Boolean,java.util.concurrent.Callable<Boolean>> action=second->()->{
+                ready.countDown();assertTrue(start.await(20,TimeUnit.SECONDS));
+                try {
+                    if(second&&scenario.endsWith("expire"))expire(id);
+                    else handovers.reverseByDonorOrAdmin(h,donor.id(),false);
+                    return true;
+                } catch(RuleViolation expected) {return false;}
+            };
+            var first=pool.submit(action.apply(false));var second=pool.submit(action.apply(true));
+            assertTrue(ready.await(20,TimeUnit.SECONDS));start.countDown();
+            int successes=(first.get(30,TimeUnit.SECONDS)?1:0)+(second.get(30,TimeUnit.SECONDS)?1:0);
+            assertEquals(scenario.equals("reverse-expire")?2:1,successes);
+        } finally {start.countDown();}
+        String state=listings.get(id).status();
+        assertTrue(java.util.Set.of("AVAILABLE","EXPIRED").contains(state));
+        assertEquals("REVERSED",requests.get(donor,r).status());
+        assertEquals(1,count("select count(*) from activity where type='REVERSED'"));
+    }
+
+
+
+    @Test void reversalActivityFailureRollsBack() {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=jdbc.queryForObject("select id from handovers where request_id=?",UUID.class,r);
+        handovers.completeByDonorOrAdmin(r,donor.id(),false);
+        String before=snapshot();
+        jdbc.execute("alter table activity add constraint lifecycle_failure check(type<>'REVERSED')");
+        try {
+            assertThrows(RuntimeException.class,()->handovers.reverseByDonorOrAdmin(h,donor.id(),false));
+            assertEquals(before,snapshot());
+        } finally {jdbc.execute("alter table activity drop constraint lifecycle_failure");}
+    }
+
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void reversalAndExpirationBothLockOrders(boolean expirationFirst) throws Exception {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=handovers.completeByDonorOrAdmin(r,donor.id(),false);due(id);
+        var firstDone=new CountDownLatch(1);var release=new CountDownLatch(1);
+        Runnable reverse=()->handovers.reverseByDonorOrAdmin(h,donor.id(),false);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var first=pool.submit(()->new TransactionTemplate(manager).executeWithoutResult(s->{
+                if(expirationFirst)expiration.expireLocked(id);else reverse.run();
+                firstDone.countDown();
+                try {assertTrue(release.await(20,TimeUnit.SECONDS));}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+            }));
+            assertTrue(firstDone.await(20,TimeUnit.SECONDS));
+            var second=pool.submit(()->{if(expirationFirst)reverse.run();else expire(id);});
+            release.countDown();first.get(30,TimeUnit.SECONDS);second.get(30,TimeUnit.SECONDS);
+        } finally {release.countDown();}
+        assertEquals(expirationFirst?"AVAILABLE":"EXPIRED",listings.get(id).status());
+        assertEquals("REVERSED",requests.get(donor,r).status());
+        assertEquals("REVERSED",jdbc.queryForObject("select status from handovers where id=?",String.class,h));
+        // If expiration saw COLLECTED first, the next pass expires the reopened listing.
+        expire(id);assertEquals("EXPIRED",listings.get(id).status());
+    }
+
+    @Test void reopenedListingCanBeRequestedAndReservedBeforeOriginalDeadline() {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=handovers.completeByDonorOrAdmin(r,donor.id(),false);
+        Instant deadline=listings.get(id).collectionDeadline();
+        handovers.reverseByDonorOrAdmin(h,donor.id(),false);
+        String history=jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h);
+        UUID next=request(id);requests.approve(donor,next);
+        assertEquals("RESERVED",listings.get(id).status());
+        assertEquals(deadline,listings.get(id).collectionDeadline());
+        due(id);expire(id);
+        assertEquals("EXPIRED",requests.get(donor,next).status());
+        assertEquals("REVERSED",requests.get(donor,r).status());
+        assertEquals(history,jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h));
+    }
+
+    @Test void reopenedOverdueListingExpiresOnNextRequestWithoutChangingReversalHistory() {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=handovers.completeByDonorOrAdmin(r,donor.id(),false);due(id);
+        handovers.reverseByDonorOrAdmin(h,donor.id(),false);
+        assertEquals("AVAILABLE",listings.get(id).status());
+        String history=jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h);
+        assertEquals("LISTING_EXPIRED",assertThrows(RuleViolation.class,()->request(id)).code());
+        assertEquals("EXPIRED",listings.get(id).status());
+        assertEquals("REVERSED",requests.get(donor,r).status());
+        assertEquals(history,jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h));
+    }
+
+    @Test void legacyApprovedRequestWithReversedHandoverRemainsHistorical() {
+        UUID id=listing(),r=request(id);requests.approve(donor,r);
+        UUID h=handovers.completeByDonorOrAdmin(r,donor.id(),false);
+        handovers.reverseByDonorOrAdmin(h,donor.id(),false);
+        jdbc.update("update requests set status='APPROVED' where id=?",r);
+        String requestBefore=jdbc.queryForObject("select to_jsonb(r)::text from requests r where id=?",String.class,r);
+        String handoverBefore=jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h);
+        due(id);expire(id);
+        assertEquals("EXPIRED",listings.get(id).status());
+        assertEquals(requestBefore,jdbc.queryForObject("select to_jsonb(r)::text from requests r where id=?",String.class,r));
+        assertEquals(handoverBefore,jdbc.queryForObject("select to_jsonb(h)::text from handovers h where id=?",String.class,h));
+    }
+
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void reversalPreservesHistoryAndAdjustsDashboardExactlyOnce(boolean admin) throws Exception {
+        UUID id=listings.create(donor,new ListingOperations.CreateListing("Food","Test","OTHER",new BigDecimal("7"),"PORTIONS",null,"Lagos",Instant.now().plusSeconds(86400))).id();
+        UUID r=request(id);requests.approve(donor,r);
+        Instant approval=requests.get(donor,r).decidedAt();
+        UUID h=handovers.completeByDonorOrAdmin(r,donor.id(),false);
+        Timestamp completed=jdbc.queryForObject("select completed_at from handovers where id=?",Timestamp.class,h);
+        Actor administrator=user("admin",Actor.Role.ADMIN);
+        assertEquals(7,dashboard().estimatedPortionsSaved());
+        due(id);Actor actor=admin?administrator:donor;
+        handovers.reverseByDonorOrAdmin(h,actor.id(),admin);
+        assertEquals("AVAILABLE",listings.get(id).status());
+        assertEquals("REVERSED",requests.get(donor,r).status());
+        assertFalse(requests.get(donor,r).decidedAt().isBefore(approval));
+        assertEquals(completed,jdbc.queryForObject("select completed_at from handovers where id=?",Timestamp.class,h));
+        assertEquals(0,dashboard().estimatedPortionsSaved());
+        assertEquals(0,dashboard().availableListings());
+        String before=snapshot();assertThrows(RuleViolation.class,()->handovers.reverseByDonorOrAdmin(h,actor.id(),admin));
+        assertEquals(before,snapshot());expire(id);assertEquals("EXPIRED",listings.get(id).status());
+    }
+
+    com.tesa.foodbridge.dashboard.api.AdminDashboardResponse dashboard() throws Exception {
+        var result=http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/dashboard")
+                .header("Authorization",bearer("admin")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andReturn();
+        return new com.fasterxml.jackson.databind.ObjectMapper().readValue(result.getResponse().getContentAsString(),
+                com.tesa.foodbridge.dashboard.api.AdminDashboardResponse.class);
+    }
     @Test void multiplePendingAndRepeatAreAtomicAndIdempotent() {
         UUID id=listing();request(id);request(id);due(id);expire(id);
         assertEquals(2,count("select count(*) from requests r join listings l on l.id=r.listing_id where r.status='EXPIRED' and r.decided_at=r.expired_at and r.expired_at=l.expired_at and r.expired_at>l.collection_deadline"));
@@ -79,9 +216,12 @@ class ExpirationPostgresTest {
     }
     @Test void reservedPreservesApprovalTimeAndExpiresAwaitingAndCompetitors() {
         UUID id=listing(),approved=request(id);request(id);requests.approve(donor,approved);
+        // A legacy pending competitor can predate main's auto-decline rule.
+        jdbc.update("insert into requests(id,listing_id,requester_id) values (?,?,?)",UUID.randomUUID(),id,recipient.id());
         Timestamp decision=jdbc.queryForObject("select decided_at from requests where id=?",Timestamp.class,approved);
         due(id);expire(id);
         assertEquals(2,count("select count(*) from requests where status='EXPIRED'"));
+        assertEquals(1,count("select count(*) from requests where status='DECLINED'"));
         assertEquals(1,count("select count(*) from handovers where status='EXPIRED' and completed_at is null and reversed_at is null"));
         assertEquals(decision,jdbc.queryForObject("select decided_at from requests where id=?",Timestamp.class,approved));
         assertEquals(1,count("select count(*) from handovers h join requests r on r.id=h.request_id join listings l on l.id=r.listing_id join activity a on a.listing_id=l.id and a.type='LISTING_EXPIRED' where h.expired_at=r.expired_at and r.expired_at=l.expired_at and l.expired_at=a.created_at and l.updated_at=l.expired_at and l.expired_at>l.collection_deadline"));
@@ -104,8 +244,8 @@ class ExpirationPostgresTest {
         for(boolean reverse:List.of(false,true)) {
             UUID id=listing(),r=request(id);requests.approve(donor,r);handovers.completeByDonorOrAdmin(r,donor.id(),false);
             if(reverse) handovers.reverseByDonorOrAdmin(jdbc.queryForObject("select id from handovers where request_id=?",UUID.class,r),donor.id(),false);
-            due(id);String before=snapshot();expire(id);assertEquals(before,snapshot());
-            assertEquals(reverse?"REVERSED":"COLLECTED",listings.getPublic(id).status());
+            due(id);String before=snapshot();expire(id);if(!reverse)assertEquals(before,snapshot());
+            assertEquals(reverse?"EXPIRED":"COLLECTED",listings.getPublic(id).status());
         }
     }
     @Test void legacyRepairDoesNotInventListingTimestamp() {
@@ -268,10 +408,10 @@ class ExpirationPostgresTest {
         try(var pool=Executors.newFixedThreadPool(2)) {
             var first=pool.submit(()->{if(expiryFirst)expire(id);else action.run();});assertTrue(sampled.await(20,TimeUnit.SECONDS));
             var second=pool.submit(()->{if(expiryFirst)action.run();else expire(id);});release.countDown();first.get(30,TimeUnit.SECONDS);
-            if(expiryFirst) {var failure=assertThrows(ExecutionException.class,()->second.get(30,TimeUnit.SECONDS));assertEquals("LISTING_EXPIRED",((RuleViolation)failure.getCause()).code());}
+            if(expiryFirst && !scenario.contains("delete")) {var failure=assertThrows(ExecutionException.class,()->second.get(30,TimeUnit.SECONDS));assertEquals("LISTING_EXPIRED",((RuleViolation)failure.getCause()).code());}
             else second.get(30,TimeUnit.SECONDS);
         } finally {release.countDown();}
-        assertEquals(!expiryFirst&&scenario.contains("edit")?"AVAILABLE":!expiryFirst&&scenario.contains("delete")?"DELETED":"EXPIRED",listings.get(id).status());
+        assertEquals(!expiryFirst&&scenario.contains("edit")?"AVAILABLE":scenario.contains("delete")?"DELETED":"EXPIRED",listings.get(id).status());
         if(!expiryFirst&&scenario.contains("cancel")) assertEquals("CANCELLED",requests.get(recipient,r).status());
         if(!expiryFirst&&scenario.contains("decline")) assertEquals("DECLINED",requests.get(recipient,r).status());
     }

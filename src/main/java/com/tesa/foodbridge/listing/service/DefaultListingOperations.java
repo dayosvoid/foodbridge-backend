@@ -106,6 +106,23 @@ public class DefaultListingOperations implements ListingOperations {
         return repository.browse(offset, limit);
     }
 
+    public ListingPage browse(ListingFilter filter, int offset, int limit) {
+        validatePage(offset, limit);
+        validateFilter(filter);
+        return repository.browse(filter, offset, limit);
+    }
+
+    public ListingPage browseAdmin(Actor actor, ListingFilter filter, int offset, int limit) {
+        if (actor.role() != Actor.Role.ADMIN)
+            throw new RuleViolation("FORBIDDEN");
+
+        users.requireRole(actor.id(), actor.role());
+        validatePage(offset, limit);
+        validateFilter(filter);
+
+        return repository.browseAdmin(filter, offset, limit);
+    }
+
     public List<ListingView> browseMine(
             Actor actor, int offset, int limit) {
 
@@ -117,6 +134,30 @@ public class DefaultListingOperations implements ListingOperations {
         validatePage(offset, limit);
 
         return repository.browseMine(actor.id(), offset, limit);
+    }
+
+    public ListingPage browseMine(
+            Actor actor, ListingFilter filter, int offset, int limit) {
+
+        if (actor.role() != Actor.Role.DONOR
+                && actor.role() != Actor.Role.ADMIN)
+            throw new RuleViolation("FORBIDDEN");
+
+        users.requireRole(actor.id(), actor.role());
+        validatePage(offset, limit);
+        validateFilter(filter);
+
+        return repository.browseMine(actor.id(), filter, offset, limit);
+    }
+
+    private void validateFilter(ListingFilter filter) {
+        if (filter == null) return;
+        if (filter.availability() != null && !filter.availability().isBlank()) {
+            String avail = filter.availability().trim().toUpperCase(java.util.Locale.ROOT);
+            if (!Set.of("AVAILABLE", "RESERVED", "COLLECTED", "REVERSED", "EXPIRED").contains(avail)) {
+                throw new RuleViolation("INVALID_LISTING");
+            }
+        }
     }
 
     private void validatePage(int offset, int limit) {
@@ -141,8 +182,12 @@ public class DefaultListingOperations implements ListingOperations {
         }
         // Authorization precedes the no-op, including for already deleted rows.
         if ("DELETED".equals(listing.status())) return;
-        expireAuthorized(id);
-        if (!"AVAILABLE".equals(listing.status())) throw new RuleViolation("LISTING_NOT_DELETABLE");
+        if ("EXPIRED".equals(listing.status())) {
+            expiration.expireLocked(id); // Reconcile unfinished children before archiving history.
+        } else {
+            expireAuthorized(id);
+            if (!"AVAILABLE".equals(listing.status())) throw new RuleViolation("LISTING_NOT_DELETABLE");
+        }
         activity.record(actor.id(), id, "LISTING_ARCHIVED", repository.archiveDetails(id));
         if (repository.markDeleted(id) != 1) throw new RuleViolation("LISTING_NOT_DELETABLE");
     }

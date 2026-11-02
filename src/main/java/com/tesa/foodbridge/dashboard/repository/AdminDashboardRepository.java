@@ -28,11 +28,13 @@ public class AdminDashboardRepository {
                  WHERE role = 'RECIPIENT')
                     AS total_recipients,
 
-                (SELECT COUNT(*) FROM listings)
+                (SELECT COUNT(*) FROM listings
+                 WHERE status <> 'DELETED')
                     AS total_listings,
 
                 (SELECT COUNT(*) FROM listings
-                 WHERE status = 'AVAILABLE')
+                 WHERE status = 'AVAILABLE'
+                   AND collection_deadline > clock_timestamp())
                     AS available_listings,
 
                 (SELECT COUNT(*) FROM listings
@@ -43,6 +45,12 @@ public class AdminDashboardRepository {
                  WHERE status = 'COLLECTED')
                     AS collected_listings,
 
+                (SELECT COUNT(*) FROM listings
+                 WHERE status = 'EXPIRED'
+                    OR (status = 'AVAILABLE'
+                        AND collection_deadline <= clock_timestamp()))
+                    AS expired_listings,
+
                 (SELECT COUNT(*) FROM requests)
                     AS total_requests,
 
@@ -52,7 +60,20 @@ public class AdminDashboardRepository {
 
                 (SELECT COUNT(*) FROM handovers
                  WHERE status = 'COLLECTED')
-                    AS completed_handovers
+                    AS completed_handovers,
+
+                (SELECT COALESCE(SUM(
+                    CASE
+                        WHEN h.portions_estimate IS NOT NULL THEN h.portions_estimate::bigint
+                        WHEN l.unit = 'PORTIONS' THEN ROUND(l.quantity)::bigint
+                        ELSE 0
+                    END
+                 ), 0)
+                 FROM handovers h
+                 JOIN requests r ON r.id = h.request_id
+                 JOIN listings l ON l.id = r.listing_id
+                 WHERE h.status = 'COLLECTED')
+                    AS estimated_portions_saved
             """,
                 (rs, rowNum) -> new AdminDashboardResponse(
                         rs.getLong("total_users"),
@@ -62,9 +83,11 @@ public class AdminDashboardRepository {
                         rs.getLong("available_listings"),
                         rs.getLong("reserved_listings"),
                         rs.getLong("collected_listings"),
+                        rs.getLong("expired_listings"),
                         rs.getLong("total_requests"),
                         rs.getLong("pending_requests"),
-                        rs.getLong("completed_handovers")
+                        rs.getLong("completed_handovers"),
+                        rs.getLong("estimated_portions_saved")
                 )
         );
     }

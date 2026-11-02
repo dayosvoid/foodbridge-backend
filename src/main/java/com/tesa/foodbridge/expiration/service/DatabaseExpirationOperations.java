@@ -47,9 +47,11 @@ public class DatabaseExpirationOperations implements ExpirationOperations {
             org.slf4j.LoggerFactory.getLogger(getClass()).warn("Expiration contradiction: legacy listing {} has a future deadline",id);
             return true;
         }
-        // Completed history contradicting an open/expired listing must never be rewritten.
-        if (handovers.stream().anyMatch(h->Set.of("COLLECTED","REVERSED").contains(h.get("status"))
-                || h.get("completed_at")!=null || h.get("reversed_at")!=null)) {
+        // Main reopens listings after reversal. Reversed handovers are retained history,
+        // not an active collection that prevents expiration of the reopened listing.
+        if (handovers.stream().anyMatch(h->!"REVERSED".equals(h.get("status"))
+                && ("COLLECTED".equals(h.get("status"))
+                || h.get("completed_at")!=null || h.get("reversed_at")!=null))) {
             org.slf4j.LoggerFactory.getLogger(getClass()).warn("Expiration contradiction: listing {} has completed handover history",id);
             return true;
         }
@@ -59,6 +61,10 @@ public class DatabaseExpirationOperations implements ExpirationOperations {
         var changedHandovers=new ArrayList<Map<String,Object>>();
         for(var r:requests) {
             if (!Set.of("PENDING","APPROVED").contains(r.get("status"))) continue;
+            // Legacy reversals may still have an APPROVED request. Preserve that
+            // history too; only unfulfilled requests are subject to expiration.
+            if (handovers.stream().anyMatch(h->r.get("id").equals(h.get("request_id"))
+                    && "REVERSED".equals(h.get("status")))) continue;
             jdbc.update("update requests set status='EXPIRED', decided_at=coalesce(decided_at,?), expired_at=?, expiration_reason=? where id=?",
                     now,now,reason,r.get("id"));
             changedRequests.add(Map.of("id",r.get("id").toString(),"previous_status",r.get("status")));

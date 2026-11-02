@@ -6,7 +6,7 @@ public interface HandoverOperations {
 
     void createForApprovedRequest(UUID requestId);
 
-    void completeByDonorOrAdmin(
+    UUID completeByDonorOrAdmin(
             UUID requestId,
             UUID actorId,
             boolean admin

@@ -100,7 +100,8 @@ class PresentationSeedPostgresTest {
         assertEquals(6,count("select count(*) from pg_constraint where contype='f' and convalidated and connamespace='public'::regnamespace"));
     }
     @Test void archivesAllTwelvePreservingTeamDataAndAuditsPreviousStatuses() throws Exception {
-        requests.approve(actor("donor1",Actor.Role.DONOR),DemoSeed.id("request3-1"));
+        // Recipient 2 has not been served: retain main's daily fairness rule.
+        requests.approve(actor("donor1",Actor.Role.DONOR),DemoSeed.id("request3-2"));
         requests.request(actor("recipient1",Actor.Role.RECIPIENT),DemoSeed.id("listing1"),"team-interaction");
         var unrelatedIds=new ArrayList<UUID>();
         for(int i=0;i<4;i++) unrelatedIds.add(listings.create(actor("donor1",Actor.Role.DONOR),
@@ -176,7 +177,7 @@ class PresentationSeedPostgresTest {
     @Test void rerunIsNoOpIncludingStatusesDeadlinesAndNewInteractions() throws Exception {
         String token=apply();
         UUID id=DemoSeed.id("replacement-v1-listing-01");
-        UUID request=requests.request(actor("recipient1",Actor.Role.RECIPIENT),id,"new-demo-interaction").id();
+        UUID request=requests.request(actor("recipient2",Actor.Role.RECIPIENT),id,"new-demo-interaction").id();
         requests.approve(actor("donor1",Actor.Role.DONOR),request);
         var before=new LinkedHashMap<String,String>();
         for(String table:List.of("users","listings","requests","handovers","activity")) before.put(table,snapshot(table,""));

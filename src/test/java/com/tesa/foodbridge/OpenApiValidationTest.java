@@ -16,5 +16,10 @@ class OpenApiValidationTest {
         assertNotNull(detail.getDelete().getResponses().get("409"));
         assertEquals("bearer",api.getComponents().getSecuritySchemes().get("bearerAuth").getScheme());
         assertTrue(((io.swagger.v3.oas.models.media.Schema<?>)api.getComponents().getSchemas().get("ListingResponse").getProperties().get("status")).getEnum().contains("DELETED"));
+        assertNotNull(api.getPaths().get("/api/admin/requests"));
+        assertNotNull(api.getPaths().get("/api/admin/requests").getGet());
+        assertNotNull(api.getPaths().get("/api/listings").getGet().getResponses().get("200").getHeaders().get("X-Total-Count"));
+        assertNotNull(api.getComponents().getSchemas().get("AdminDashboardResponse").getProperties().get("expiredListings"));
+        assertNotNull(api.getComponents().getSchemas().get("AdminDashboardResponse").getProperties().get("estimatedPortionsSaved"));
     }
 }
