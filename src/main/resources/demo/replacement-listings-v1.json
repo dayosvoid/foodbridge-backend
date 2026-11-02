@@ -1,0 +1,1501 @@
+{
+    "dataset_key":  "foodbridge-demo-replacement-v1",
+    "approved_dataset_sha256":  "35bd009bc8adbce8944babda284f55d731291074c38f45a5e372021206f11020",
+    "presentation_policy":  {
+                                "anchor":  "demo_epoch",
+                                "anchor_definition":  "Capture one UTC Instant when creating a fresh demo dataset or performing an explicitly approved demo reset. Resolve every relative timestamp from this single anchor and persist as timestamptz.",
+                                "field_encoding":  "Materialize collection_deadline as max(demo_epoch + offset_seconds, not_before). created_at and updated_at remain demo_epoch. Presentation: 2026-11-03 10:00 WAT; deadline floor: 2026-11-05 18:00 WAT.",
+                                "repeat_execution":  "Ordinary startup/rerun must preserve persisted dates and interactions. Only an explicit approved reset may establish a new epoch for these demo records. Stable IDs prevent duplicate records.",
+                                "expiry":  "collection_deadline is both the collection cutoff and expiry eligibility deadline. No separate expiry field or automatic status-expiry scheduler exists.",
+                                "offsets_hours":  {
+                                                      "prepared_meals":  8,
+                                                      "seafood_and_snail":  4,
+                                                      "suya_and_small_chops":  6,
+                                                      "bread":  24,
+                                                      "produce":  48,
+                                                      "dry_pantry":  168
+                                                  },
+                                "note":  "The absolute presentation floor applies only on initial insertion. Ordinary reruns preserve persisted deadlines and interactions. After the floor, relative offsets continue to provide future deadlines. These fictional demo windows are not food safety or shelf-life claims.",
+                                "presentation_utc":  "2026-11-03T09:00:00Z",
+                                "minimum_collection_deadline_utc":  "2026-11-05T17:00:00Z"
+                            },
+    "donors":  [
+                   {
+                       "seed_key":  "donor1",
+                       "id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                       "email":  "donor1@demo.foodbridge.invalid",
+                       "display_name":  "Yaba Community Kitchen (Demo)",
+                       "role":  "DONOR",
+                       "created_at":  {
+                                          "anchor":  "demo_epoch",
+                                          "offset_seconds":  0
+                                      },
+                       "password_hash_source":  "DEMO_PASSWORD_HASH",
+                       "reuse_policy":  "Reuse only if deterministic ID, exact demo email and DONOR role agree. Preserve existing password hash and created_at. Proposed display_name applies only to this verified demo account. Abort on identity conflict; never modify non-demo users."
+                   },
+                   {
+                       "seed_key":  "donor2",
+                       "id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                       "email":  "donor2@demo.foodbridge.invalid",
+                       "display_name":  "Surulere Neighbourhood Kitchen (Demo)",
+                       "role":  "DONOR",
+                       "created_at":  {
+                                          "anchor":  "demo_epoch",
+                                          "offset_seconds":  0
+                                      },
+                       "password_hash_source":  "DEMO_PASSWORD_HASH",
+                       "reuse_policy":  "Reuse only if deterministic ID, exact demo email and DONOR role agree. Preserve existing password hash and created_at. Proposed display_name applies only to this verified demo account. Abort on identity conflict; never modify non-demo users."
+                   }
+               ],
+    "listings":  [
+                     {
+                         "seed_key":  "replacement-v1-listing-01",
+                         "id":  "f2080471-bd27-3134-81f4-0b25fc5877f4",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Amala and Ewedu",
+                         "description":  "Soft amala with ewedu soup, packed separately as 24 meal portions. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  24,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438864/amala-and-ewedu.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  2,
+                                                  "cloudinary_public_id":  "amala-and-ewedu",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-02",
+                         "id":  "53defde4-c6b0-36e2-8b34-8454b06128ed",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Pounded Yam and Egusi Soup",
+                         "description":  "Pounded yam with egusi soup from a community lunch, packed as 30 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  30,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438880/pounded-yam-and-egusi-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  3,
+                                                  "cloudinary_public_id":  "pounded-yam-and-egusi-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Rows 3 and 34 describe the same food combination with different wording and distinct asset IDs/URLs; visual duplication not assessed."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-03",
+                         "id":  "ac1c97bd-6dd8-3693-8c77-ed7f3482c204",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Eba and Ogbono Soup",
+                         "description":  "Eba with ogbono soup, portioned into 20 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  20,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438871/eba-and-ogbono-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  4,
+                                                  "cloudinary_public_id":  "eba-and-ogbono-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-04",
+                         "id":  "fec5c249-fbfc-31f8-8483-0e2cac75fcc6",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Semovita and Efo Riro",
+                         "description":  "Semovita with efo riro, packed as 25 complete meals with soup in separate containers. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  25,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438887/semovita-and-efo-riro.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  5,
+                                                  "cloudinary_public_id":  "semovita-and-efo-riro",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-05",
+                         "id":  "691c1638-d91d-37b5-97a8-9511519fd2e5",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Fufu and Okra Soup",
+                         "description":  "Fufu with okra soup, portioned into 18 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438874/fufu-and-okra-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  6,
+                                                  "cloudinary_public_id":  "fufu-and-okra-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-06",
+                         "id":  "52a2ab53-3a1a-3b76-8acb-9d2e383f3bfb",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Wheat and Afang Soup",
+                         "description":  "Wheat swallow with afang soup, packed as 16 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  16,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438891/wheat-and-afang-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  7,
+                                                  "cloudinary_public_id":  "wheat-and-afang-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-07",
+                         "id":  "cde473ce-248b-3bff-aef8-35c98731a3f7",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Pounded Yam and Vegetable Soup",
+                         "description":  "Pounded yam with mixed vegetable soup, packed as 22 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  22,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438883/pounded-yam-and-vegetable-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  8,
+                                                  "cloudinary_public_id":  "pounded-yam-and-vegetable-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-08",
+                         "id":  "ee787267-e899-3eaf-9148-2ff16ac63c42",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Eba and Bitterleaf Soup",
+                         "description":  "Eba with bitterleaf soup, portioned into 18 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438869/eba-and-bitterleaf-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  9,
+                                                  "cloudinary_public_id":  "eba-and-bitterleaf-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-09",
+                         "id":  "c2038cdc-fcf7-361b-bcd8-ba89510c2452",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Amala and Gbegiri Soup",
+                         "description":  "Amala with gbegiri soup, packed as 28 complete meals with soup in separate containers. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  28,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438865/amala-and-gbegiri-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  10,
+                                                  "cloudinary_public_id":  "amala-and-gbegiri-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-10",
+                         "id":  "dc1adcc9-a15d-368e-b4f1-0f1ceb5f820a",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Fufu and Edikang Ikong Soup",
+                         "description":  "Fufu with edikang ikong soup, packed as 20 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  20,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438874/fufu-and-edikang-ikong-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  11,
+                                                  "cloudinary_public_id":  "fufu-and-edikang-ikong-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-11",
+                         "id":  "b9faa5ac-099a-3cdc-a855-956dcad12850",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Semovita and Nsala Soup",
+                         "description":  "Semovita with nsala soup, portioned into 15 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  15,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438889/semovita-and-nsala-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  12,
+                                                  "cloudinary_public_id":  "semovita-and-nsala-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-12",
+                         "id":  "cd9b12e7-a476-3e2d-a52e-268f9a2854c9",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Pounded Yam and Ofe Owerri",
+                         "description":  "Pounded yam with Ofe Owerri, packed as 18 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438883/pounded-yam-and-owerri-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  13,
+                                                  "cloudinary_public_id":  "pounded-yam-and-owerri-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-13",
+                         "id":  "e8ff8738-2264-328a-be70-58e06674934e",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Amala and Ogbono Soup",
+                         "description":  "Amala with ogbono soup, packed as 24 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  24,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438866/amala-and-ogbono-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  14,
+                                                  "cloudinary_public_id":  "amala-and-ogbono-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-14",
+                         "id":  "b47254f4-ea6a-3107-aec5-cb05d93ab66d",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Eba and Afang Soup",
+                         "description":  "Eba with afang soup, portioned into 16 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  16,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438868/eba-and-afang-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  15,
+                                                  "cloudinary_public_id":  "eba-and-afang-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-15",
+                         "id":  "fb3d4cc8-7a65-3fb1-b348-146415de4ea4",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Semovita and Banga Soup",
+                         "description":  "Semovita with banga soup, packed as 20 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  20,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438886/semovita-and-banga-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  16,
+                                                  "cloudinary_public_id":  "semovita-and-banga-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-16",
+                         "id":  "103ae7e1-ef6c-34f4-8243-c8cd52a0ab67",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Fufu and Ukazi Soup",
+                         "description":  "Fufu with ukazi soup, portioned into 18 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438876/fufu-and-ukazi-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  17,
+                                                  "cloudinary_public_id":  "fufu-and-ukazi-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-17",
+                         "id":  "30ba3016-94d3-337b-b103-17bc53960c4f",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Amala and Efo Eko",
+                         "description":  "Amala with efo eko, packed as 24 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  24,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438864/amala-and-efo-eko.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  18,
+                                                  "cloudinary_public_id":  "amala-and-efo-eko",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-18",
+                         "id":  "70213992-acf7-3876-b795-e9736a68e8f3",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Wheat and Ogbono Soup",
+                         "description":  "Wheat swallow with ogbono soup, packed as 16 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  16,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438863/wheat-and-ogbono-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  19,
+                                                  "cloudinary_public_id":  "wheat-and-ogbono-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-19",
+                         "id":  "fe939f6b-829c-3a01-8c8d-2f5ab4d1a47a",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Eba and Egusi Soup",
+                         "description":  "Eba with egusi soup, portioned into 26 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  26,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438870/eba-and-egusi-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  20,
+                                                  "cloudinary_public_id":  "eba-and-egusi-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-20",
+                         "id":  "a981a609-1429-3a2d-8fa3-f5b2e01c5676",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Pounded Yam and Okra Soup",
+                         "description":  "Pounded yam with okra soup, packed as 20 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  20,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438882/pounded-yam-and-okra-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  21,
+                                                  "cloudinary_public_id":  "pounded-yam-and-okra-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-21",
+                         "id":  "79c00bbc-5f04-3ec7-ad31-03f8d6a1da1c",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Semovita and Vegetable Soup",
+                         "description":  "Semovita with vegetable soup, packed as 22 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  22,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438889/semovita-and-vegetable-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  22,
+                                                  "cloudinary_public_id":  "semovita-and-vegetable-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-22",
+                         "id":  "2bea587f-afe7-3cb4-ae12-9b4bb8b4564c",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Fufu and Bitterleaf Soup",
+                         "description":  "Fufu with bitterleaf soup, portioned into 18 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438873/fufu-and-bitterleaf-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  23,
+                                                  "cloudinary_public_id":  "fufu-and-bitterleaf-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-23",
+                         "id":  "45189ad1-62c3-3b28-8ee4-918e4aad6d78",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Amala and Seafood Soup",
+                         "description":  "Amala with seafood soup, packed as 14 complete meals. Contains seafood. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  14,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438867/amala-and-seafood-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  14400,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  24,
+                                                  "cloudinary_public_id":  "amala-and-seafood-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-24",
+                         "id":  "1914942b-5555-3566-8941-1ee0f947c0ee",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Eba and Ogbono with Seafood",
+                         "description":  "Eba with ogbono and seafood, packed as 16 complete meals. Contains seafood. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  16,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438872/eba-and-ogbono-with-seafood.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  14400,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  25,
+                                                  "cloudinary_public_id":  "eba-and-ogbono-with-seafood",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-25",
+                         "id":  "dc0cc75e-d61e-3c43-a138-94b13f8ea088",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Pounded Yam and Egusi Vegetable Soup",
+                         "description":  "Pounded yam with egusi vegetable soup, packed as 24 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  24,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438881/pounded-yam-and-egusi-vegetable-soup.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  26,
+                                                  "cloudinary_public_id":  "pounded-yam-and-egusi-vegetable-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-26",
+                         "id":  "df8777eb-1beb-35ae-be04-0f6988f41320",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Mashed Potatoes and Beef Stew",
+                         "description":  "Mashed potatoes with beef stew from a catered lunch, packed as 15 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  15,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438876/mashed-potatoes-and-beef-stew.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  27,
+                                                  "cloudinary_public_id":  "mashed-potatoes-and-beef-stew",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-27",
+                         "id":  "a529250a-682f-3c6a-95d0-399c7d025259",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Rice and Curry",
+                         "description":  "Rice with curry sauce, portioned into 30 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  30,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438885/rice-and-curry.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  28,
+                                                  "cloudinary_public_id":  "rice-and-curry",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-28",
+                         "id":  "7f7eec31-8bc2-3831-afaf-31c8af3af1f2",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Polenta and Mushroom Sauce",
+                         "description":  "Polenta with mushroom sauce from a catered lunch, packed as 12 meal portions. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  12,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438880/polenta-and-mushroom-sauce.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  29,
+                                                  "cloudinary_public_id":  "polenta-and-mushroom-sauce",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-29",
+                         "id":  "e8cb7d14-78ea-3c31-bb51-63e20a8aece6",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Couscous and Vegetable Stew",
+                         "description":  "Couscous with vegetable stew, portioned into 18 covered meal packs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438867/couscous-and-vegetable-stew.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  30,
+                                                  "cloudinary_public_id":  "couscous-and-vegetable-stew",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-30",
+                         "id":  "9c354266-92d8-3f0f-99b8-f832deb77c2d",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Mashed Yam and Grilled Chicken",
+                         "description":  "Mashed yam with grilled chicken, packed as 20 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  20,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438877/mashed-yam-and-grilled-chicken.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  31,
+                                                  "cloudinary_public_id":  "mashed-yam-and-grilled-chicken",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-31",
+                         "id":  "e76366da-9a64-3bc0-8eb1-dc57290af150",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Suya Beef Skewers",
+                         "description":  "Grilled suya beef skewers, bundled in covered trays containing 40 skewers in total. Suya spice contains groundnuts. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  40,
+                         "unit":  "ITEMS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438891/suya-beef-skewers.jpg",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  21600,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  32,
+                                                  "cloudinary_public_id":  "suya-beef-skewers",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-32",
+                         "id":  "0cfb281b-cea5-3fa2-8138-bf852908fcda",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Small Chops Platter",
+                         "description":  "Small chops assortment, packed in 12 sharing boxes with puff-puff, spring rolls and samosas. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  12,
+                         "unit":  "BOXES",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438890/small-chops-platter.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  21600,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  33,
+                                                  "cloudinary_public_id":  "small-chops-platter",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-33",
+                         "id":  "52b883a7-df48-3327-971f-7647d6421ca3",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Pounded Yam Egusi Soup",
+                         "description":  "Pounded yam with egusi soup from a separate neighbourhood catering batch, packed as 18 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  18,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438884/pounded-yam-egusi-soup.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  34,
+                                                  "cloudinary_public_id":  "pounded-yam-egusi-soup",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Rows 3 and 34 describe the same food combination with different wording and distinct asset IDs/URLs; visual duplication not assessed.",
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-34",
+                         "id":  "ba219d21-e87c-3f16-9e8d-1ba66f9aa191",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Peppered Snail",
+                         "description":  "Peppered snail, portioned into 15 covered snack packs. Contains molluscs. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  15,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438879/peppered-snail.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  14400,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  35,
+                                                  "cloudinary_public_id":  "peppered-snail",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-35",
+                         "id":  "78634a94-81d9-33b6-bc0d-23fcde9195a9",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Moi Moi",
+                         "description":  "Steamed moi moi, individually wrapped as 36 portions. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  36,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438878/moi-moi.webp",
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  36,
+                                                  "cloudinary_public_id":  "moi-moi",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-36",
+                         "id":  "dcd2bf57-7544-3208-95fe-2a152f2c26ba",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Fried Rice With Turkey",
+                         "description":  "Fried rice with turkey, packed as 28 complete meals. Collect the full donation at the kitchen collection desk after approval; bring suitable food carriers. Fictional demo donation; no real food is offered.",
+                         "category":  "PREPARED_MEALS",
+                         "quantity":  28,
+                         "unit":  "PORTIONS",
+                         "image_url":  "https://res.cloudinary.com/qjcfxycq/image/upload/v1793438873/fried-rice-with-turkey.jpg",
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  28800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  {
+                                                  "source_spreadsheet_row":  37,
+                                                  "cloudinary_public_id":  "fried-rice-with-turkey",
+                                                  "matching_status":  "matched_source_title",
+                                                  "mapping_validated_at_utc":  "2026-10-31T22:27:10.0272426Z",
+                                                  "notes":  [
+                                                                "Source labels this as an extra asset outside the original 30-image list; its explicit source title is retained."
+                                                            ]
+                                              },
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff; there is no separate pickup-window or expiry column."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-37",
+                         "id":  "8289c85b-5575-3206-8f66-26b92d9c1d79",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Fresh Agege Bread Loaves",
+                         "description":  "Twenty-four unsliced Agege-style bread loaves from a neighbourhood baking batch, packed in clean bread bags. Collect the full batch for community meal distribution. Fictional demo donation; no real food is offered.",
+                         "category":  "BAKERY",
+                         "quantity":  24,
+                         "unit":  "ITEMS",
+                         "image_url":  null,
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  86400,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  null,
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-38",
+                         "id":  "97539e4c-6bea-31f0-b3aa-897d5a1fc5c4",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Fresh Tomatoes and Scotch Bonnet Peppers",
+                         "description":  "Ten kilograms of mixed fresh tomatoes and Scotch bonnet peppers, sorted into reusable produce crates. Bring crates or strong bags and collect the full donation. Fictional demo donation; no real food is offered.",
+                         "category":  "PRODUCE",
+                         "quantity":  10,
+                         "unit":  "KG",
+                         "image_url":  null,
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  172800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  null,
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-39",
+                         "id":  "1e7a1c97-c47b-330e-b349-8deab229e968",
+                         "donor_id":  "487c47b3-65e8-3ca1-bccb-7ee2a44172d6",
+                         "donor_seed_key":  "donor1",
+                         "title":  "Dry Honey Beans for Community Cooking",
+                         "description":  "Twenty-five kilograms of dry honey beans in five labelled 5 kg bags for a community kitchen. Collect all five bags and bring a trolley or suitable transport. Fictional demo donation; no real food is offered.",
+                         "category":  "PANTRY",
+                         "quantity":  25,
+                         "unit":  "KG",
+                         "image_url":  null,
+                         "pickup_area":  "Yaba, Lagos - fictional demo community kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  604800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  null,
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff."
+                     },
+                     {
+                         "seed_key":  "replacement-v1-listing-40",
+                         "id":  "428d09c7-02ae-3b9d-9f76-936022189c20",
+                         "donor_id":  "0b512802-54ad-333b-9757-977db2c5deff",
+                         "donor_seed_key":  "donor2",
+                         "title":  "Unopened Garri Packs",
+                         "description":  "Twenty sealed 1 kg packs of garri for community pantry distribution. Quantity is the number of packs; total food weight is 20 kg. Collect the complete batch. Fictional demo donation; no real food is offered.",
+                         "category":  "PANTRY",
+                         "quantity":  20,
+                         "unit":  "ITEMS",
+                         "image_url":  null,
+                         "pickup_area":  "Surulere, Lagos - fictional demo neighbourhood kitchen collection desk",
+                         "collection_deadline":  {
+                                                     "anchor":  "demo_epoch",
+                                                     "offset_seconds":  604800,
+                                                     "not_before":  "2026-11-05T17:00:00Z"
+                                                 },
+                         "status":  "AVAILABLE",
+                         "created_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "updated_at":  {
+                                            "anchor":  "demo_epoch",
+                                            "offset_seconds":  0
+                                        },
+                         "image_provenance":  null,
+                         "pickup_instructions":  "Collect after approval and before collection_deadline. The same deadline is the listing expiry cutoff."
+                     }
+                 ]
+}

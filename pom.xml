@@ -121,7 +121,7 @@
 
       <plugin>
         <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
+        <artifactId>spring-boot-maven-plugin</artifactId><configuration><mainClass>com.tesa.foodbridge.FoodBridgeApplication</mainClass></configuration>
       </plugin>
 
     </plugins>

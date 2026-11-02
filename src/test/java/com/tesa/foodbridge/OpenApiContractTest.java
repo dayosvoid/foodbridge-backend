@@ -33,11 +33,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "foodbridge.demo.seed-enabled=true",
+                "foodbridge.demo.seed-enabled=false",
                 "DEMO_PASSWORD_HASH=test-only-hash"
         }
 )
 class OpenApiContractTest {
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Container
     static final PostgreSQLContainer<?> postgres =
@@ -313,6 +315,21 @@ class OpenApiContractTest {
                 requestsPath.getGet().getResponses().get("200")
         );
 
+        // Explicit fixtures in the disposable database; startup seeding only previews.
+        for (String key : java.util.List.of("recipient1", "recipient2", "donor1")) {
+            jdbc.update("insert into users(id,email,password_hash,display_name,role) values (?,?,?,?,?) on conflict do nothing",
+                    com.tesa.foodbridge.demo.DemoSeed.id(key), key+"@demo.foodbridge.invalid", "disabled",
+                    key, key.startsWith("recipient") ? "RECIPIENT" : "DONOR");
+        }
+        UUID listing = UUID.randomUUID(), ownRequest = UUID.randomUUID();
+        jdbc.update("insert into listings(id,donor_id,title,description,category,quantity,unit,pickup_area,collection_deadline) values (?,?,'Contract fixture','Test only','OTHER',1,'ITEMS','Test',clock_timestamp()+interval '1 day')",
+                listing, com.tesa.foodbridge.demo.DemoSeed.id("donor1"));
+        for (String key : java.util.List.of("recipient1", "recipient2")) {
+            jdbc.update("insert into requests(id,listing_id,requester_id,status,idempotency_key) values (?,?,?,'PENDING',?)",
+                    key.equals("recipient1") ? ownRequest : UUID.randomUUID(), listing,
+                    com.tesa.foodbridge.demo.DemoSeed.id(key), UUID.randomUUID().toString());
+        }
+
         // Log in as recipient
         HttpHeaders loginHeaders = new HttpHeaders();
         loginHeaders.setContentType(MediaType.APPLICATION_JSON);
@@ -367,7 +384,10 @@ class OpenApiContractTest {
                 "My requests endpoint must return a JSON array"
         );
 
-        // Validate returned requests, if any exist
+        assertEquals(1, requests.size());
+        assertEquals(ownRequest.toString(), requests.get(0).path("id").asText());
+
+        // Validate returned requests, including recipient ownership.
         for (JsonNode request : requests) {
 
             assertTrue(request.hasNonNull("id"));
