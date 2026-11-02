@@ -15,7 +15,9 @@ public interface ReservationOperations {
             String requesterName,
             String status,
             Instant createdAt,
-            Instant decidedAt
+            Instant decidedAt,
+            Instant expiredAt,
+            String expirationReason
     ) {}
 
     RequestView request(

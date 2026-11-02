@@ -16,12 +16,15 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     private final JdbcTemplate jdbc;
     private final ActivityRecorder activity;
+    private final com.tesa.foodbridge.expiration.api.ExpirationOperations expiration;
 
     DatabaseHandoverOperations(
             JdbcTemplate jdbc,
-            ActivityRecorder activity) {
+            ActivityRecorder activity,
+            com.tesa.foodbridge.expiration.api.ExpirationOperations expiration) {
         this.jdbc = jdbc;
         this.activity = activity;
+        this.expiration = expiration;
     }
 
     @Override
@@ -34,11 +37,13 @@ class DatabaseHandoverOperations implements HandoverOperations {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor=com.tesa.foodbridge.shared.DeadlineExpired.class)
     public void completeByDonorOrAdmin(
             UUID requestId,
             UUID actorId,
             boolean admin) {
+
+        authorizeAndLock(requestId, false, actorId, admin, true);
 
         UUID listingId;
 
@@ -93,6 +98,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
             UUID actorId,
             boolean admin) {
 
+        authorizeAndLock(handoverId, true, actorId, admin, false);
+
         UUID listingId;
 
         try {
@@ -137,5 +144,15 @@ class DatabaseHandoverOperations implements HandoverOperations {
         }
 
         activity.record(actorId, listingId, "REVERSED");
+    }
+
+    private void authorizeAndLock(UUID id, boolean byHandover, UUID actor, boolean admin, boolean enforceDeadline) {
+        var ids=jdbc.queryForList("select l.id from listings l join requests r on r.listing_id=l.id "
+                +"join handovers h on h.request_id=r.id where "+(byHandover?"h.id":"r.id")
+                +"=? and (? or l.donor_id=?)", UUID.class,id,admin,actor);
+        if(ids.isEmpty()) throw new RuleViolation("HANDOVER_NOT_FOUND_OR_FORBIDDEN");
+        if(enforceDeadline) {
+            if(expiration.expireLocked(ids.get(0))) throw new com.tesa.foodbridge.shared.DeadlineExpired();
+        } else expiration.lockAggregate(ids.get(0));
     }
 }

@@ -35,8 +35,17 @@ public interface ListingOperations {
             String status,
             Instant createdAt,
             Instant updatedAt,
-            int pendingRequestCount
-    ) {}
+            int pendingRequestCount,
+            Instant expiredAt,
+            String expirationReason
+    ) {
+        public ListingView(UUID id, UUID donorId, String donorName, String title, String description,
+                String category, BigDecimal quantity, String unit, String imageUrl, String pickupArea,
+                Instant collectionDeadline, String status, Instant createdAt, Instant updatedAt, int pendingRequestCount) {
+            this(id,donorId,donorName,title,description,category,quantity,unit,imageUrl,pickupArea,
+                    collectionDeadline,status,createdAt,updatedAt,pendingRequestCount,null,null);
+        }
+    }
 
     ListingView create(Actor actor, CreateListing command);
 

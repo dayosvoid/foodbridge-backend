@@ -134,8 +134,6 @@ public class ListingController {
                 .filter(l -> keyword == null
                         || l.title().toLowerCase().contains(keyword.toLowerCase())
                         || l.description().toLowerCase().contains(keyword.toLowerCase()))
-                .filter(l -> !l.collectionDeadline().isBefore(Instant.now())
-                        || "EXPIRED".equalsIgnoreCase(l.status()))
                 .map(this::toResponse)
                 .toList();
     }
@@ -167,7 +165,7 @@ public class ListingController {
                 l.donorId().toString(),
                 l.donorName(),
                 l.createdAt(),
-                l.pendingRequestCount()
+                l.pendingRequestCount(), l.expiredAt(), l.expirationReason()
         );
     }
 }

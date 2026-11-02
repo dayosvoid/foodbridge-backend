@@ -64,6 +64,9 @@ public class ApiExceptionHandler {
                  "IDEMPOTENCY_KEY_REUSED" ->
                     HttpStatus.CONFLICT;
 
+             case "HANDOVER_NOT_PENDING", "LISTING_NOT_RESERVED", "HANDOVER_NOT_COLLECTED", "LISTING_NOT_COLLECTED" -> HttpStatus.CONFLICT;
+             case "HANDOVER_NOT_FOUND_OR_FORBIDDEN" -> HttpStatus.NOT_FOUND;
+
             default ->
                     HttpStatus.BAD_REQUEST;
         };

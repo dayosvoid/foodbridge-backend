@@ -12,5 +12,7 @@ public class ReservationRequest {
     @Column(name="idempotency_key", length=200) private String idempotencyKey;
     @Column(name="created_at", nullable=false) private Instant createdAt;
     @Column(name="decided_at") private Instant decidedAt;
+    @Column(name="expired_at") private Instant expiredAt;
+    @Column(name="expiration_reason",length=50) private String expirationReason;
     protected ReservationRequest() {}
 }

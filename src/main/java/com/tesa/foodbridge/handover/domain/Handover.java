@@ -11,5 +11,7 @@ public class Handover {
     @Column(name="portions_estimate") private Integer portionsEstimate;
     @Column(name="completed_at") private Instant completedAt;
     @Column(name="reversed_at") private Instant reversedAt;
+    @Column(name="expired_at") private Instant expiredAt;
+    @Column(name="expiration_reason",length=50) private String expirationReason;
     protected Handover() {}
 }
