@@ -30,9 +30,24 @@ public final class PresentationSeedMaintenance {
     }
     public record Preview(String approvalToken,JsonNode affectedRecords,List<String> blockers) {}
 
+    public record LifecycleOperations(
+            com.tesa.foodbridge.listing.api.ListingOperations listings,
+            com.tesa.foodbridge.handover.api.HandoverOperations handovers,
+            com.tesa.foodbridge.expiration.api.ExpirationOperations expiration,
+            com.tesa.foodbridge.distribution.api.DailyDistributionOperations distribution) {}
+
+    public Preview lifecyclePreview() {
+        return new PresentationLifecycleScenarios(jdbc,env,null).preview();
+    }
+
+    public void applyLifecycle(String approvedToken, LifecycleOperations operations) {
+        new PresentationLifecycleScenarios(jdbc,env,operations).apply(approvedToken);
+    }
+
     public Preview preview() {
         ObjectNode snapshot=(ObjectNode)new DemoSeed(jdbc,env).preview().affectedRecords().deepCopy();
         snapshot.put("operation",OPERATION);
+        snapshot.set("lifecycle_scenario_plan",PresentationLifecycleScenarios.plan());
         snapshot.put("audit_strategy","Immutable external before-image journal; no activity rows are inserted or changed.");
         snapshot.put("audit_journal",journal.path().toString());
         snapshot.put("backup_required",true);

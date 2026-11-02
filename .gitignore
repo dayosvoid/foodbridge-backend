@@ -35,6 +35,7 @@ backups/
 /docs/demo-legacy-ids.md
 /docs/demo-seed-verification.md
 /docs/presentation-*.md
+!/docs/presentation-lifecycle-scenarios.md
 /docs/v5-migration-results.md
 /docs/sql/verify-demo-seed.sql
 /foodbridge-backend.zip

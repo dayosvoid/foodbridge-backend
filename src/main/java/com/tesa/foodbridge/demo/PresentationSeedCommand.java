@@ -13,6 +13,11 @@ import java.util.*;
 /** Explicit command-line entry point only. Never registered or executed by Spring Boot startup. */
 public final class PresentationSeedCommand {
     public static void main(String[] args) throws Exception {
+        run(args,System.getenv());
+    }
+
+    /** Same command dispatch with an explicit environment map for isolated provisioning tests. */
+    static void run(String[] args, Map<String,String> commandEnvironment) throws Exception {
         Map<String,String> options=new HashMap<>();
         for(String arg:args) {
             if(!arg.startsWith("--")) throw new IllegalArgumentException("Named arguments required.");
@@ -20,6 +25,10 @@ public final class PresentationSeedCommand {
             if(options.put(pair[0],pair.length==2?pair[1]:"true")!=null) throw new IllegalArgumentException("Duplicate argument");
         }
         if(!"true".equals(options.get("enable"))) throw new IllegalStateException("Explicit --enable is required.");
+        if (options.containsKey("scenarios")) {
+            disposableLifecycle(options,commandEnvironment);
+            return; // Never load .env or use the shared maintenance target for lifecycle provisioning.
+        }
         String mode=options.getOrDefault("mode","preview");
         if(!Set.of("preview","apply").contains(mode)) throw new IllegalArgumentException("mode must be preview or apply");
         String host=Objects.requireNonNull(options.get("expected-host"),"--expected-host is required");
@@ -78,4 +87,68 @@ public final class PresentationSeedCommand {
         if(options.containsKey("output")) Files.writeString(Path.of(options.get("output")),output);
         else System.out.println(output);
     }
+
+    private static void disposableLifecycle(Map<String,String> options,Map<String,String> commandEnvironment) throws Exception {
+        if (!"lifecycle-v1".equals(options.get("scenarios")) || !"true".equals(options.get("disposable")))
+            throw new IllegalStateException("Lifecycle scenarios require --scenarios=lifecycle-v1 --disposable=true.");
+        String mode = options.getOrDefault("mode","preview");
+        if (!Set.of("migrate","preview","apply").contains(mode)) throw new IllegalArgumentException("Unsupported lifecycle mode");
+        var env = new StandardEnvironment();
+        if (env.acceptsProfiles(org.springframework.core.env.Profiles.of("prod","production"))
+                || !"demo".equals(options.getOrDefault("profile","demo")))
+            throw new IllegalStateException("Production profiles prohibit lifecycle provisioning.");
+        env.setActiveProfiles("demo");
+        env.getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("disposable-maintenance",Map.of(
+                "foodbridge.presentation.maintenance-enabled",true,
+                "foodbridge.presentation.lifecycle-disposable-enabled",true)));
+        String url = Objects.requireNonNull(commandEnvironment.get("FOODBRIDGE_DISPOSABLE_URL"),"FOODBRIDGE_DISPOSABLE_URL required");
+        PresentationLifecycleScenarios.validateTarget(url); // Before opening any connection.
+        var ds = new DriverManagerDataSource(url,
+                Objects.requireNonNull(commandEnvironment.get("FOODBRIDGE_DISPOSABLE_USER"),"Disposable user required"),
+                Objects.requireNonNull(commandEnvironment.get("FOODBRIDGE_DISPOSABLE_PASSWORD"),"Disposable password required"));
+        if (mode.equals("migrate")) {
+            org.flywaydb.core.Flyway.configure().dataSource(ds).load().migrate();
+            return; // Explicit schema-only mode, never an implicit preview side effect.
+        }
+        // Only JDBC domain services are wired; no Boot startup, .env import, web/security
+        // context, automatic Flyway, scheduler or extra seed runner is started.
+        try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+            context.setEnvironment(env);
+            context.registerBean(javax.sql.DataSource.class,() -> ds);
+            context.registerBean(JdbcTemplate.class,() -> new JdbcTemplate(ds));
+            context.registerBean(org.springframework.transaction.PlatformTransactionManager.class,() -> {
+                var manager = new DataSourceTransactionManager(ds);
+                manager.setEnforceReadOnly(true);
+                return manager;
+            });
+            context.register(DisposableDomainOperations.class);
+            context.refresh();
+            var tx = new TransactionTemplate(context.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+            tx.setReadOnly(mode.equals("preview"));
+            tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+            var maintenance = new PresentationSeedMaintenance(context.getBean(JdbcTemplate.class),env);
+            var operations = new PresentationSeedMaintenance.LifecycleOperations(
+                    context.getBean(com.tesa.foodbridge.listing.api.ListingOperations.class),
+                    context.getBean(com.tesa.foodbridge.handover.api.HandoverOperations.class),
+                    context.getBean(com.tesa.foodbridge.expiration.api.ExpirationOperations.class),
+                    context.getBean(com.tesa.foodbridge.distribution.api.DailyDistributionOperations.class));
+            var result = tx.execute(status -> {
+                if (mode.equals("apply")) maintenance.applyLifecycle(options.get("approved-preview"),operations);
+                return maintenance.lifecyclePreview();
+            });
+            String output = new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(result);
+            if(options.containsKey("output")) Files.writeString(Path.of(options.get("output")),output);
+            else System.out.println(output);
+        }
+    }
+
+    // Explicitly registered lite configuration, deliberately not a component:
+    // Boot's normal package scan must never discover this CLI-only context.
+    @org.springframework.transaction.annotation.EnableTransactionManagement
+    @org.springframework.context.annotation.ComponentScan(basePackages={
+            "com.tesa.foodbridge.listing.service", "com.tesa.foodbridge.listing.repository",
+            "com.tesa.foodbridge.user.service", "com.tesa.foodbridge.activity.service",
+            "com.tesa.foodbridge.handover.service", "com.tesa.foodbridge.expiration.service",
+            "com.tesa.foodbridge.distribution.service"})
+    static class DisposableDomainOperations {}
 }
