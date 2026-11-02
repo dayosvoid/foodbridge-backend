@@ -62,6 +62,23 @@ public class HandoverController {
             @PathVariable UUID handoverId,
             Authentication authentication) {
 
+        return executeReverse(handoverId, authentication);
+    }
+
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth")
+    @PatchMapping("/api/requests/{requestId}/reverse")
+    public Map<String, String> reverseByRequest(
+            @PathVariable UUID requestId,
+            Authentication authentication) {
+
+        return executeReverse(requestId, authentication);
+    }
+
+    private Map<String, String> executeReverse(
+            UUID handoverOrRequestId,
+            Authentication authentication) {
+
         Actor actor = actorFactory.from(authentication);
         boolean admin = actor.role() == Actor.Role.ADMIN;
 
@@ -71,11 +88,11 @@ public class HandoverController {
 
         users.requireRole(actor.id(), actor.role());
 
-        handovers.reverseByDonorOrAdmin(
-                handoverId, actor.id(), admin);
+        UUID resolvedHandoverId = handovers.reverseByDonorOrAdmin(
+                handoverOrRequestId, actor.id(), admin);
 
         return Map.of(
-                "handoverId", handoverId.toString(),
+                "handoverId", resolvedHandoverId.toString(),
                 "message", "Handover reversed successfully",
                 "status", "REVERSED"
         );

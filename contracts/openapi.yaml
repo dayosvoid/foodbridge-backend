@@ -533,6 +533,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/requests/{requestId}/reverse:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Handovers]
+      operationId: reverseApprovedRequest
+      summary: Reverse an approved request or handover using requestId
+      description: Owning donor or admin only. Moves the request and handover to REVERSED and returns the listing to AVAILABLE if still eligible before its collection deadline.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Approval or handover reversed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverActionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Request or handover not found
+        '409':
+          description: Request cannot be reversed in its current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/handovers/{handoverId}/reverse:
     parameters:
       - name: handoverId
@@ -882,6 +912,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        handoverId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the associated handover once the request has been approved, or null while pending/declined/cancelled.
+        handoverStatus:
+          type: string
+          enum: [AWAITING_COLLECTION, COLLECTED, REVERSED]
+          nullable: true
+          description: Current status of the associated handover, or null if no handover exists.
 
     HandoverActionResponse:
       type: object

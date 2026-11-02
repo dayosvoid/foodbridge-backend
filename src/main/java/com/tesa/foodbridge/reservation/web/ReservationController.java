@@ -182,7 +182,9 @@ public class ReservationController {
                 r.requesterId().toString(),
                 r.requesterName(),
                 r.status(),
-                r.createdAt()
+                r.createdAt(),
+                r.handoverId() == null ? null : r.handoverId().toString(),
+                r.handoverStatus()
         );
     }
 }
