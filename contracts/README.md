@@ -17,4 +17,3 @@ Generate and run a live HTTP mock server directly from `contracts/openapi.yaml` 
 ```bash
 npx --yes @stoplight/prism-cli mock contracts/openapi.yaml --port 4010
 ```
-

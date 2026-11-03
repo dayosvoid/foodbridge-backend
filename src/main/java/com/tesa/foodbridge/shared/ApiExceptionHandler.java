@@ -70,6 +70,7 @@ public class ApiExceptionHandler {
                  "DAILY_DISTRIBUTION_PRIORITY" ->
                     HttpStatus.CONFLICT;
 
+
             default ->
                     HttpStatus.BAD_REQUEST;
         };

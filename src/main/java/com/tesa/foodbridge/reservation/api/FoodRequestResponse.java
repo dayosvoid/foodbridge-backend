@@ -8,5 +8,7 @@ public record FoodRequestResponse(
         String recipientId,
         String recipientName,
         String status,
-        Instant createdAt
+        Instant createdAt,
+        Instant expiredAt,
+        String expirationReason
 ) {}

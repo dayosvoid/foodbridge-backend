@@ -16,12 +16,15 @@ class DatabaseHandoverOperations implements HandoverOperations {
 
     private final JdbcTemplate jdbc;
     private final ActivityRecorder activity;
+    private final com.tesa.foodbridge.expiration.api.ExpirationOperations expiration;
 
     DatabaseHandoverOperations(
             JdbcTemplate jdbc,
-            ActivityRecorder activity) {
+            ActivityRecorder activity,
+            com.tesa.foodbridge.expiration.api.ExpirationOperations expiration) {
         this.jdbc = jdbc;
         this.activity = activity;
+        this.expiration = expiration;
     }
 
     @Override
@@ -34,11 +37,13 @@ class DatabaseHandoverOperations implements HandoverOperations {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor=com.tesa.foodbridge.shared.DeadlineExpired.class)
     public UUID completeByDonorOrAdmin(
             UUID requestId,
             UUID actorId,
             boolean admin) {
+
+        authorizeAndLock(requestId, false, actorId, admin, true);
 
         var row = jdbc.query("""
             select l.id as listing_id,
@@ -123,6 +128,8 @@ class DatabaseHandoverOperations implements HandoverOperations {
             UUID actorId,
             boolean admin) {
 
+        authorizeAndLock(handoverId, true, actorId, admin, false);
+
         var row = jdbc.query("""
             select l.id as listing_id,
                    l.donor_id,
@@ -202,5 +209,20 @@ class DatabaseHandoverOperations implements HandoverOperations {
         }
 
         activity.record(actorId, listingId, "REVERSED");
+    }
+
+    private void authorizeAndLock(UUID id, boolean byHandover, UUID actor, boolean admin, boolean enforceDeadline) {
+        var ids=jdbc.queryForList("select l.id from listings l join requests r on r.listing_id=l.id "
+                +"left join handovers h on h.request_id=r.id where "+(byHandover?"h.id":"r.id")
+                +"=? and (? or l.donor_id=?)", UUID.class,id,admin,actor);
+        if(ids.isEmpty()) {
+            boolean exists = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "select exists(select 1 from requests r left join handovers h on h.request_id=r.id where "
+                    + (byHandover ? "h.id" : "r.id") + "=?)", Boolean.class, id));
+            throw new RuleViolation(exists ? "FORBIDDEN" : (byHandover ? "HANDOVER_NOT_FOUND" : "REQUEST_NOT_FOUND"));
+        }
+        if(enforceDeadline) {
+            if(expiration.expireLocked(ids.get(0))) throw new com.tesa.foodbridge.shared.DeadlineExpired();
+        } else expiration.lockAggregate(ids.get(0));
     }
 }

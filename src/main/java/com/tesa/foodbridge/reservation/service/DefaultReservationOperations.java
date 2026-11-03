@@ -29,6 +29,7 @@ public class DefaultReservationOperations
     private final UserDirectory users;
     private final DailyDistributionOperations dailyDistribution;
     private final TransactionTemplate tx;
+    private final com.tesa.foodbridge.expiration.api.ExpirationOperations expiration;
 
     public DefaultReservationOperations(
             RequestRepository requests,
@@ -37,13 +38,15 @@ public class DefaultReservationOperations
             ActivityRecorder activity,
             UserDirectory users,
             DailyDistributionOperations dailyDistribution,
-            PlatformTransactionManager manager) {
+            PlatformTransactionManager manager,
+            com.tesa.foodbridge.expiration.api.ExpirationOperations expiration) {
 
         this.requests = requests;
         this.listings = listings;
         this.handovers = handovers;
         this.activity = activity;
         this.users = users;
+        this.expiration = expiration;
         this.dailyDistribution = dailyDistribution;
 
         tx = new TransactionTemplate(manager);
@@ -81,7 +84,7 @@ public class DefaultReservationOperations
 
         try {
 
-            return tx.execute(s -> {
+            return execute(s -> {
 
                 if (key != null) {
 
@@ -123,7 +126,7 @@ public class DefaultReservationOperations
                     "requests_idempotency_key_key"
             )) {
 
-                return tx.execute(
+                return execute(
                         s -> replay(
                                 requests
                                         .byKey(key)
@@ -158,7 +161,7 @@ public class DefaultReservationOperations
             Actor actor,
             UUID id) {
 
-        return tx.execute(s -> {
+        return execute(s -> {
 
             var request = required(id);
 
@@ -178,7 +181,10 @@ public class DefaultReservationOperations
                     actor.role()
             );
 
-            if (!request.status().equals("PENDING")
+            lockAndExpire(request.listingId());
+
+            if (!request.status()
+                    .equals("PENDING")
                     || !requests.decline(id)) {
 
                 throw new RuleViolation(
@@ -209,7 +215,7 @@ public class DefaultReservationOperations
                 actor.role()
         );
 
-        return tx.execute(s -> {
+        return execute(s -> {
 
             var request = required(id);
 
@@ -217,8 +223,14 @@ public class DefaultReservationOperations
                 throw new RuleViolation("FORBIDDEN");
             }
 
-            if (!request.status().equals("PENDING")
-                    || !requests.cancel(id, actor.id())) {
+            lockAndExpire(request.listingId());
+
+            if (!request.status()
+                    .equals("PENDING")
+                    || !requests.cancel(
+                    id,
+                    actor.id()
+            )) {
 
                 throw new RuleViolation(
                         "REQUEST_NOT_PENDING"
@@ -306,7 +318,7 @@ public class DefaultReservationOperations
 
         try {
 
-            return tx.execute(s -> {
+            return execute(s -> {
 
                 var request = required(id);
 
@@ -406,6 +418,21 @@ public class DefaultReservationOperations
         }
 
         return r;
+    }
+
+    // A deadline conflict is raised only after its successful expiration transaction commits.
+    private <T> T execute(org.springframework.transaction.support.TransactionCallback<T> action) {
+        var expired = new boolean[1];
+        T result=tx.execute(status->{
+            try { return action.doInTransaction(status); }
+            catch (DeadlineExpired e) { expired[0]=true; return null; }
+        });
+        if(expired[0]) throw new DeadlineExpired();
+        return result;
+    }
+
+    private void lockAndExpire(UUID listingId) {
+        if(expiration.expireLocked(listingId)) throw new DeadlineExpired();
     }
 
     private boolean unique(

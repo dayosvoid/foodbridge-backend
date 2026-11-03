@@ -632,65 +632,32 @@ class PostgresRulesTest {
     // --------------------------------------------------
 
     @Test
-    void demoSeedIsRepeatableAndHasRequiredStates() {
+    void demoSeedPreviewIsRepeatableAndPreservesExistingInteractions() {
+        UUID listing=listing(), pending=request(listing);
+        String before=domainSnapshot();
+        var environment=new org.springframework.mock.env.MockEnvironment()
+                .withProperty("foodbridge.demo.seed-enabled","true");
+        environment.setActiveProfiles("demo");
+        var seed=new com.tesa.foodbridge.demo.DemoSeed(jdbc,environment);
+        String token=seed.preview().approvalToken();
+        seed.run(new org.springframework.boot.DefaultApplicationArguments());
+        seed.run(new org.springframework.boot.DefaultApplicationArguments());
+        assertEquals(token,seed.preview().approvalToken());
+        assertEquals(before,domainSnapshot());
+        assertEquals("PENDING",requests.get(recipient,pending).status());
+        assertEquals("AVAILABLE",listings.get(listing).status());
+        assertEquals(0,count("select count(*) from users where email like '%@demo.foodbridge.invalid'"));
+    }
 
-        var seed = new com.tesa.foodbridge.demo.DemoSeed(
-                jdbc,
-                new org.springframework.mock.env.MockEnvironment()
-                        .withProperty(
-                                "DEMO_PASSWORD_HASH",
-                                "disabled-test-hash"
-                        )
-        );
-
-        seed.run(
-                new org.springframework.boot.DefaultApplicationArguments()
-        );
-
-        seed.run(
-                new org.springframework.boot.DefaultApplicationArguments()
-        );
-
-        assertEquals(
-                6,
-                count("""
-                    select count(*)
-                    from users
-                    where email like '%@demo.foodbridge.invalid'
-                    """)
-        );
-
-        assertEquals(
-                12,
-                count("select count(*) from listings")
-        );
-
-        assertEquals(
-                2,
-                count("""
-                    select count(*)
-                    from listings
-                    where status='EXPIRED'
-                    """)
-        );
-
-        assertEquals(
-                3,
-                jdbc.queryForObject("""
-                    select count(*)
-                    from requests
-                    where listing_id = ?
-                      and status = 'PENDING'
-                    """,
-                        Integer.class,
-                        com.tesa.foodbridge.demo.DemoSeed.id("listing3")
-                )
-        );
-
-        assertEquals(
-                3,
-                count("select count(*) from handovers")
-        );
+    private String domainSnapshot() {
+        return jdbc.queryForObject("""
+                select jsonb_build_object(
+                    'users',(select jsonb_agg(to_jsonb(u) order by id) from users u),
+                    'listings',(select jsonb_agg(to_jsonb(l) order by id) from listings l),
+                    'requests',(select jsonb_agg(to_jsonb(r) order by id) from requests r),
+                    'handovers',(select jsonb_agg(to_jsonb(h) order by id) from handovers h),
+                    'activity',(select jsonb_agg(to_jsonb(a) order by id) from activity a))::text
+                """,String.class);
     }
 
     @Test void deletionSnapshotsPreviousStateAndPreservesHistory() throws Exception {
@@ -1125,7 +1092,7 @@ class PostgresRulesTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.completedHandovers").value(2))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.estimatedPortionsSaved").value(20));
 
-        // Reverse the portions handover -> listing returns to AVAILABLE, request becomes REVERSED, estimatedPortionsSaved drops back to 0
+        // Reverse the portions handover -> listing becomes AVAILABLE, request becomes REVERSED, estimatedPortionsSaved drops back to 0
         UUID handoverId=jdbc.queryForObject("select id from handovers where request_id=?",UUID.class,reqPortions);
         http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/handovers/"+handoverId+"/reverse")
                 .header("Authorization",bearer("donor1")))

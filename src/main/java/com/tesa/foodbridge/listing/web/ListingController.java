@@ -177,9 +177,8 @@ public class ListingController {
                 l.donorId().toString(),
                 l.donorName(),
                 l.createdAt(),
-                l.pendingRequestCount(),
-                deleted,
-                deleted ? l.updatedAt() : null
+                l.pendingRequestCount(), l.expiredAt(), l.expirationReason(),
+                deleted, deleted ? l.updatedAt() : null
         );
     }
 }

@@ -40,7 +40,9 @@ public class RequestRepository {
                             ? null
                             : r.getTimestamp(
                             "decided_at"
-                    ).toInstant()
+                    ).toInstant(),
+                    r.getTimestamp("expired_at")==null?null:r.getTimestamp("expired_at").toInstant(),
+                    r.getString("expiration_reason")
             );
 
     private static final String SELECT = """

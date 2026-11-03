@@ -73,3 +73,21 @@ Record date, decision, alternatives, tradeoff and approval from both engineers.
 - **Named Cost Accepted:** Listings measured in `KG`, `LITRES`, `ITEMS`, or `BOXES` without an explicit `portions_estimate` do not increment `estimatedPortionsSaved` (though they still increment `completedHandovers` and `collectedListings`).
 - **Observation That Would Reverse the Decision:** If the product introduces a mandatory donor-supplied `estimatedPortions` field on every listing creation form regardless of unit, we would populate `handovers.portions_estimate` from that field on handover creation.
 
+## Lifecycle integration with main
+
+Migrations V1-V6 are retained unchanged. V7 adds atomic expiration and nullable
+processing-time audit metadata. V8 retains that metadata when an expired listing
+is soft-deleted. Upgrades from V6 preserve earlier Flyway checksums and historical
+reversed records; unknown historical expiration times are not invented.
+
+Collection retains the handoverId response. Reversal by the owning donor or ADMIN
+marks the request and handover REVERSED, records reversal time, and reopens the
+listing as AVAILABLE without extending its deadline. No donor approval-cancellation
+operation is introduced. The existing recipient cancellation of PENDING requests
+and approval auto-decline behavior remain unchanged.
+
+A reopened overdue listing expires on the next scheduler pass or guarded command.
+Historical reversed handovers and their requests are preserved; they do not prevent
+expiration of a new unfulfilled reservation on the same listing. If expiration sees
+COLLECTED before reversal, it preserves that state and a later pass handles the
+reopened listing. Listing/request expiration fields are additive to main's DTOs.

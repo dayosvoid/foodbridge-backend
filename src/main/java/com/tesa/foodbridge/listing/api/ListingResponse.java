@@ -18,6 +18,8 @@ public record ListingResponse(
         String donorName,
         Instant createdAt,
         int pendingRequestCount,
+        Instant expiredAt,
+        String expirationReason,
         boolean deleted,
         Instant deletedAt
 ) {}

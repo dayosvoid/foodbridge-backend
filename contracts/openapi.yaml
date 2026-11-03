@@ -274,7 +274,7 @@ paths:
         '404':
           description: Listing not found
         '409':
-          description: Listing is not AVAILABLE and cannot be edited
+          description: Listing is not AVAILABLE and cannot be edited, or LISTING_EXPIRED at or after collectionDeadline
     delete:
       tags: [Listings]
       operationId: deleteListing
@@ -292,7 +292,7 @@ paths:
         '404':
           description: Listing not found
         '409':
-          description: Listing is RESERVED, COLLECTED or REVERSED
+          description: Listing is RESERVED, COLLECTED, REVERSED or EXPIRED (LISTING_EXPIRED for deadline closure)
 
 
   /api/listings/{listingId}/requests:
@@ -353,7 +353,7 @@ paths:
         '404':
           description: Listing not found
         '409':
-          description: Listing unavailable or idempotency key reused
+          description: Listing unavailable (including LISTING_EXPIRED), or idempotency key reused
           content:
             application/json:
               schema:
@@ -440,7 +440,7 @@ paths:
         '404':
           description: Request not found
         '409':
-          description: Listing already reserved or request is not pending
+          description: Listing already reserved, request is not pending, or LISTING_EXPIRED at or after collectionDeadline
           content:
             application/json:
               schema:
@@ -469,7 +469,7 @@ paths:
         '404':
           description: Request not found
         '409':
-          description: Request is not pending
+          description: Request is not pending, or LISTING_EXPIRED at or after collectionDeadline
           content:
             application/json:
               schema:
@@ -498,7 +498,7 @@ paths:
         '404':
           description: Request not found
         '409':
-          description: Request is not pending
+          description: Request is not pending, or LISTING_EXPIRED at or after collectionDeadline
           content:
             application/json:
               schema:
@@ -527,7 +527,7 @@ paths:
         '404':
           description: Request or handover not found
         '409':
-          description: Handover is not in a collectable state
+          description: Handover is not in a collectable state, or LISTING_EXPIRED at or after collectionDeadline
           content:
             application/json:
               schema:
@@ -545,6 +545,7 @@ paths:
       tags: [Handovers]
       operationId: reverseHandover
       summary: Reverse a completed handover
+      description: Owning donor or administrator reverses a collection. Handover and request become REVERSED, request decided_at records reversal time, and the listing reopens as AVAILABLE. Its original deadline is unchanged. Repeated reversal returns 409.
       security:
         - bearerAuth: []
       responses:
@@ -840,6 +841,15 @@ components:
             - REVERSED
             - EXPIRED
             - DELETED
+        expiredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Database processing time when this entity transitioned to EXPIRED, sampled after aggregate locks and shared with its activity event. Preserved on retries; null for legacy entities with unknown transition time. Eligibility ends at collectionDeadline.
+        expirationReason:
+          type: string
+          nullable: true
+          enum: [COLLECTION_DEADLINE_PASSED, LEGACY_EXPIRATION_RECONCILIATION]
 
         donorId:
           type: string
@@ -879,6 +889,15 @@ components:
         status:
           type: string
           enum: [PENDING, APPROVED, DECLINED, CANCELLED, EXPIRED, REVERSED]
+        expiredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Database processing time when this entity transitioned to EXPIRED, sampled after aggregate locks and shared with its activity event. Preserved on retries; null for legacy entities with unknown transition time. Eligibility ends at collectionDeadline.
+        expirationReason:
+          type: string
+          nullable: true
+          enum: [COLLECTION_DEADLINE_PASSED, LEGACY_EXPIRATION_RECONCILIATION]
         createdAt:
           type: string
           format: date-time

@@ -15,7 +15,8 @@ class ListingDeletionTest {
     final ListingRepository repository=mock(ListingRepository.class);
     final UserDirectory users=mock(UserDirectory.class);
     final ActivityRecorder activity=mock(ActivityRecorder.class);
-    final DefaultListingOperations service=new DefaultListingOperations(repository,users,activity);
+    final com.tesa.foodbridge.expiration.api.ExpirationOperations expiration=mock(com.tesa.foodbridge.expiration.api.ExpirationOperations.class);
+    final DefaultListingOperations service=new DefaultListingOperations(repository,users,activity,expiration);
     final Actor owner=new Actor(UUID.randomUUID(),Actor.Role.DONOR);
     final UUID id=UUID.randomUUID();
     void listing(String status) {

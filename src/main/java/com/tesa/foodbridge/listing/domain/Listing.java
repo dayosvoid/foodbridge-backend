@@ -22,5 +22,7 @@ public class Listing {
     @Column(nullable=false, length=30) private String status;
     @Column(name="created_at", nullable=false) private Instant createdAt;
     @Column(name="updated_at", nullable=false) private Instant updatedAt;
+    @Column(name="expired_at") private Instant expiredAt;
+    @Column(name="expiration_reason", length=50) private String expirationReason;
     protected Listing() {}
 }

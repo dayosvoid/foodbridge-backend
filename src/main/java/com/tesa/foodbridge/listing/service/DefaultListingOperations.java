@@ -9,7 +9,6 @@ import com.tesa.foodbridge.activity.api.ActivityRecorder;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
-import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,14 +21,17 @@ public class DefaultListingOperations implements ListingOperations {
     private final ListingRepository repository;
     private final UserDirectory users;
     private final ActivityRecorder activity;
+    private final com.tesa.foodbridge.expiration.api.ExpirationOperations expiration;
 
     public DefaultListingOperations(
             ListingRepository repository,
             UserDirectory users,
-            ActivityRecorder activity) {
+            ActivityRecorder activity,
+            com.tesa.foodbridge.expiration.api.ExpirationOperations expiration) {
         this.repository = repository;
         this.users = users;
         this.activity = activity;
+        this.expiration = expiration;
     }
 
     @Transactional
@@ -50,7 +52,7 @@ public class DefaultListingOperations implements ListingOperations {
         return listing;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor=DeadlineExpired.class)
     public ListingView update(Actor actor, UUID id, CreateListing c) {
 
         if (actor.role() != Actor.Role.DONOR)
@@ -63,6 +65,8 @@ public class DefaultListingOperations implements ListingOperations {
 
         if (!existing.donorId().equals(actor.id()))
             throw new RuleViolation("FORBIDDEN");
+
+        expireAuthorized(id);
 
         if (!existing.status().equals("AVAILABLE"))
             throw new RuleViolation("LISTING_NOT_EDITABLE");
@@ -168,7 +172,7 @@ public class DefaultListingOperations implements ListingOperations {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor=DeadlineExpired.class)
     public void delete(Actor actor, UUID id) {
         users.requireRole(actor.id(), actor.role());
         var listing = lock(id);
@@ -178,8 +182,11 @@ public class DefaultListingOperations implements ListingOperations {
         }
         // Authorization precedes the no-op, including for already deleted rows.
         if ("DELETED".equals(listing.status())) return;
-        if (!"AVAILABLE".equals(listing.status()) && !"EXPIRED".equals(listing.status())) {
-            throw new RuleViolation("LISTING_NOT_DELETABLE");
+        if ("EXPIRED".equals(listing.status())) {
+            expiration.expireLocked(id); // Reconcile unfinished children before archiving history.
+        } else {
+            expireAuthorized(id);
+            if (!"AVAILABLE".equals(listing.status())) throw new RuleViolation("LISTING_NOT_DELETABLE");
         }
         activity.record(actor.id(), id, "LISTING_ARCHIVED", repository.archiveDetails(id));
         if (repository.markDeleted(id) != 1) throw new RuleViolation("LISTING_NOT_DELETABLE");
@@ -195,22 +202,22 @@ public class DefaultListingOperations implements ListingOperations {
 
         if (listing.status().equals("DELETED")) throw new RuleViolation("LISTING_NOT_FOUND");
 
-        if (repository.deadlinePassed(listing.id())
-                || listing.status().equals("EXPIRED"))
+        if (listing.status().equals("EXPIRED"))
             throw new RuleViolation("LISTING_EXPIRED");
 
         if (!listing.status().equals("AVAILABLE"))
             throw new RuleViolation("LISTING_ALREADY_RESERVED");
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY, noRollbackFor=DeadlineExpired.class)
     public ListingView lockForRequest(UUID id) {
         var l = lock(id);
+        expireAuthorized(id);
         requireOpen(l);
         return l;
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY, noRollbackFor=DeadlineExpired.class)
     public ListingView lockForApproval(UUID id, Actor actor) {
 
         var l = lock(id);
@@ -221,6 +228,7 @@ public class DefaultListingOperations implements ListingOperations {
             throw new RuleViolation("FORBIDDEN");
 
         users.requireRole(actor.id(), actor.role());
+        expireAuthorized(id);
         requireOpen(l);
 
         return l;
@@ -247,10 +255,8 @@ public class DefaultListingOperations implements ListingOperations {
         throw new RuleViolation("FORBIDDEN");
     }
 
-    // Automatically expire overdue listings every minute
-    @Scheduled(fixedRate = 60000)
-    @Transactional
-    public void expireListings() {
-        repository.expireDueListings();
+    private void expireAuthorized(UUID id) {
+        if (expiration.expireLocked(id)) throw new DeadlineExpired();
     }
+    public void expireListings() { expiration.expireDue(); }
 }

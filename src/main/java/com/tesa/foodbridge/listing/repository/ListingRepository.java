@@ -31,7 +31,9 @@ public class ListingRepository {
                     r.getString("status"),
                     r.getTimestamp("created_at").toInstant(),
                     r.getTimestamp("updated_at").toInstant(),
-                    r.getInt("pending_request_count")
+                    r.getInt("pending_request_count"),
+                    r.getTimestamp("expired_at")==null?null:r.getTimestamp("expired_at").toInstant(),
+                    r.getString("expiration_reason")
             );
 
     private static final String SELECT = """
@@ -292,14 +294,4 @@ public class ListingRepository {
                         new RuntimeException("Listing not found"));
     }
 
-    // Automatically expire overdue listings
-    public int expireDueListings() {
-        return jdbc.update("""
-            update listings
-            set status = 'EXPIRED',
-                updated_at = clock_timestamp()
-            where status = 'AVAILABLE'
-              and collection_deadline <= clock_timestamp()
-            """);
-    }
 }
